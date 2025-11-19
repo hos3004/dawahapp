@@ -1,0 +1,92 @@
+name: daawah_app
+description: [translate:"مشروع فلاتر جديد."]
+publish_to: 'none' # [translate: "يمنع النشر العرضي"]
+
+version: 1.0.0+1
+
+environment:
+  # --- [translate: تم تصحيح الصيغة هنا] ---
+  sdk: '>=3.9.2 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  better_player_plus: ^1.1.2
+  smooth_page_indicator: ^1.1.0 # <-- [translate: أضف هذه المكتبة]
+  wakelock_plus: ^1.4.0
+  share_plus: ^7.2.2 # (أو أحدث إصدار تجده على pub.dev)
+  shared_preferences: ^2.2.3
+  # --- [translate: حزم أساسية] ---
+  cupertino_icons: ^1.0.6
+  youtube_player_flutter: ^9.0.0
+  # 1. [translate: لإدارة الحالة (BLoC)]
+  flutter_bloc: ^8.1.5
+  equatable: ^2.0.5
+  google_fonts: ^6.2.1
+  # 2. [translate: لجلب البيانات من الـ API]
+  http: ^1.2.1
+  flutter_svg: ^2.0.0
+  # 3. [translate: لعرض الصور (تم توحيد الإصدار)]
+  cached_network_image: ^3.3.1
+  # 4. [translate: لتشغيل الفيديو]
+  video_player: ^2.8.1
+  chewie: ^1.7.4
+  just_audio: ^0.10.5
+  # 5. [translate: لعرض محتوى HTML (مثل وصف الحلقات)]
+  flutter_html: ^3.0.0-beta.2
+
+  # 6. [translate: حزم مساعدة (تم توحيد الإصدار)]
+  nb_utils: ^7.1.8
+  intl: ^0.20.2 # ([translate: للتاريخ والترجمة])
+
+  # 8. [translate: للبنر السفلي المخصص (الشكل الجديد)]
+  convex_bottom_bar: ^3.2.0
+  webview_flutter: ^4.7.0 # [translate: أو أحدث إصدار]
+  url_launcher: ^6.3.0 # <-- أضف هذا السطر
+  stream_transform: ^2.1.0 # Or latest version
+  path_provider: ^2.1.1 # (أو أحدث إصدار)
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4   # [translate: أو أي إصدار حديث متوافق]
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"  # [translate: عدّل المسار حسب ملفك]
+
+  # [translate: حزمة التدقيق (Linting)]
+  flutter_lints: ^5.0.0
+
+# [translate: إعدادات Flutter الخاصة بالمشروع]
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/videos/Comp1.mp4
+    - assets/images/logo.png
+    - assets/images/bbg.jpg
+    - assets/icons/telegram.png   # <-- تأكد من إضافة هذا السطر
+    - assets/icons/x.png
+    - assets/icons/fb.png
+    - assets/icons/insta.png
+    - assets/icons/tiktok.png
+    - assets/icons/youtube.png
+    - assets/images/app_icon1.png
+    - assets/images/frame.png
+    - assets/images/cover_frame.jpg
+    - assets/quran/surahs_index.json
+    - assets/quran/juzs_index.json
+    - assets/quran/mushafs_list.json
+
+  # [translate: لإضافة الصور (Assets)]
+  # assets:
+  #   - images/logo.png
+
+  # [translate: لإضافة الخطوط]
+  # fonts:
+  #   - family: Cairo
+  #     fonts:
+  #       - asset: fonts/Cairo-Regular.ttf
+  #       - asset: fonts/Cairo-Bold.ttf
+  #         weight: 700

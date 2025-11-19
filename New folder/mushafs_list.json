@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1,
+    "name": "مصحف حفص",
+    "description": "القرآن الكريم برواية حفص عن عاصم، موافق لطبعة مجمع الملك فهد لطباعة المصحف الشريف",
+    "image": "https://api.quranpedia.net/front/assets/img/mushafs/1-min.png",
+    "bismillah": "",
+    "font_file": null,
+    "images": "https://api.quranpedia.net/api-quran-svg/hafs.zip",
+    "images_png": "https://api.quranpedia.net/api-quran-png/hafs.zip",
+    "rawi": {
+      "id": 10,
+      "full_name": "بن سليمان بن المغيرة، أبو عمر الأسدي الكوفي الغاضري البزاز",
+      "name": "حفص",
+      "qiraa": {
+        "id": 5,
+        "short_name": "عاصم",
+        "full_name": "عاصم بن أبي النَّجود الأسدي الكوفي",
+        "count": {
+          "id": 6,
+          "name": "الكوفي"
+        }
+      }
+    }
+  },
+  {
+    "id": 4,
+    "name": "مصحف ورش",
+    "description": "المصحف الكريم برواية ورش عن نافع بالخط العثماني من إصدار مجمع الملك فهد لطباعة المصحف الشريف، نسخة موافقة للمطبوع",
+    "image": "https://api.quranpedia.net/front/assets/img/mushafs/Warsh.jpg",
+    "bismillah": "بِسْمِ اِ۬للَّهِ اِ۬لرَّحْمَٰنِ اِ۬لرَّحِيمِ ",
+    "font_file": "https://api.quranpedia.net/fonts/KFGQPCWarshUthmanicScript-Regul.woff2",
+    "images": "https://api.quranpedia.net/api-quran-svg/warsh.zip",
+    "images_png": "https://api.quranpedia.net/api-quran-png/warsh.zip",
+    "rawi": {
+      "id": 2,
+      "full_name": "عثمان بن سعيد بن عبد الله، أبو سعيد المصري، لقبه نافع (ورشا) لبياضه",
+      "name": "ورش",
+      "qiraa": {
+        "id": 1,
+        "short_name": "نافع",
+        "full_name": "نافع بن عبد الرحمن بن أبي نعيم المدني",
+        "count": {
+          "id": 2,
+          "name": "المدني الأخير"
+        }
+      }
+    }
+  },
+  {
+    "id": 7,
+    "name": "مصحف قالون",
+    "description": "المصحف الكريم برواية قالون عن نافع بالخط العثماني من إصدار مجمع الملك فهد لطباعة المصحف الشريف، نسخة موافقة للمطبوع",
+    "image": "https://api.quranpedia.net/front/assets/img/mushafs/Qaloun.jpg",
+    "bismillah": "بِسْمِ اِ۬للَّهِ اِ۬لرَّحْمَٰنِ اِ۬لرَّحِيمِ",
+    "font_file": "https://api.quranpedia.net/fonts/UthmanicQaloon1Ver05.otf",
+    "images": "https://api.quranpedia.net/api-quran-svg/qalon.zip",
+    "images_png": "https://api.quranpedia.net/api-quran-png/qalon.zip",
+    "rawi": {
+      "id": 1,
+      "full_name": "عيسى بن مينا بن وردان بن عيسى الزرقي (أبو موسى) مولى بني زهرة",
+      "name": "قالون",
+      "qiraa": {
+        "id": 1,
+        "short_name": "نافع",
+        "full_name": "نافع بن عبد الرحمن بن أبي نعيم المدني",
+        "count": {
+          "id": 2,
+          "name": "المدني الأخير"
+        }
+      }
+    }
+  },
+  {
+    "id": 6,
+    "name": "مصحف الدوري",
+    "description": "المصحف الكريم برواية الدوري بالخط العثماني من إصدار مجمع الملك فهد لطباعة المصحف الشريف، نسخة موافقة للمطبوع",
+    "image": "https://api.quranpedia.net/front/assets/img/mushafs/Douri_Final-PSD.jpg",
+    "bismillah": "بِسْمِ اِ۬للَّهِ اِ۬لرَّحْمَٰنِ اِ۬لرَّحِيمِ ",
+    "font_file": "https://api.quranpedia.net/fonts/UthmanicDoori1Ver05.otf",
+    "images": "https://api.quranpedia.net/api-quran-svg/douri.zip",
+    "images_png": "https://api.quranpedia.net/api-quran-png/douri.zip",
+    "rawi": {
+      "id": 5,
+      "full_name": "حفص بن عمر بن عبد العزيز، أبو عمر الدوري النحوي",
+      "name": "الدوري",
+      "qiraa": {
+        "id": 3,
+        "short_name": "أبو عمرو",
+        "full_name": "أبو عمرو بن العلاء البصري",
+        "count": {
+          "id": 4,
+          "name": "البصري"
+        }
+      }
+    }
+  }
+]

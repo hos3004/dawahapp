@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name_arabic": "أبو بكر الشاطري",
+    "slug": "Abu_Bakr_Ash-Shaatree",
+    "bit_rate": "128kbps",
+    "source_url": "https://everyayah.com/data/Abu_Bakr_Ash-Shaatree_128kbps/PageMp3s/",
+    "file_structure": "Page"
+  },
+  {
+    "id": 2,
+    "name_arabic": "أحمد العجمي",
+    "slug": "Ahmed_Al_Ajmi",
+    "bit_rate": "192kbps",
+    "source_url": "https://everyayah.com/data/Ahmed_ibn_Ali_al-Ajamy_64kbps_QuranExplorer.Com/PageMp3s/",
+    "file_structure": "/page"
+  }
+
+
+]

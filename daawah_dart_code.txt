@@ -1,0 +1,4461 @@
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\main.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:nb_utils/nb_utils.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'data/repositories/program_repository.dart';
+import 'local/app_localizations.dart';
+import 'presentation/screens/home/home_screen.dart';
+import 'presentation/screens/Splash_Screen/Splash_Screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initialize();
+
+  // Ø£Ù„ÙˆØ§Ù† Ù†ØµÙˆØµ nb_utils Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠØ©
+  textPrimaryColorGlobal = Colors.black;
+  textSecondaryColorGlobal = Colors.grey.shade700;
+
+  // Ù‚ÙÙ„ Ø§Ù„Ø§ØªØ¬Ø§Ù‡ Ø§Ø®ØªÙŠØ§Ø±ÙŠ (Ø´Ø§Ø´Ø§Øª Ø¹Ù…ÙˆØ¯ÙŠØ© ÙÙ‚Ø·)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  runApp(
+    RepositoryProvider<ProgramRepository>(
+      create: (_) => ProgramRepository(),
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final baseLight = ThemeData(
+      brightness: Brightness.light,
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+      scaffoldBackgroundColor: Colors.grey[100],
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+    );
+
+    final baseDark = ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.dark,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.blue.shade700,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+    );
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Daawah App',
+
+      // Light theme
+      theme: baseLight.copyWith(
+        textTheme: GoogleFonts.tajawalTextTheme(baseLight.textTheme).apply(
+          bodyColor: Colors.black87,
+          displayColor: Colors.black87,
+        ),
+      ),
+
+      // Dark theme
+      darkTheme: baseDark.copyWith(
+        textTheme: GoogleFonts.tajawalTextTheme(baseDark.textTheme).apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
+      ),
+
+      themeMode: ThemeMode.system,
+
+      // Ø§Ù„Ù„ØºØ©: Ø¹Ø±Ø¨ÙŠ
+      locale: const Locale('ar'),
+      supportedLocales: const [Locale('ar')],
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+
+      // Ù…Ø³Ø§Ø±Ø§Øª Ø§Ù„ØªØ·Ø¨ÙŠÙ‚
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const SplashScreen(), // ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø§Ù†ÙŠÙ…ÙŠØ´Ù†
+        '/home': (context) => const HomeScreen(),
+      },
+
+      // Ø§Ù†ØªÙ‚Ø§Ù„ Ù†Ø§Ø¹Ù… (Fade) Ù„Ø£ÙŠ Route ØºÙŠØ± Ù…Ø¹Ø±Ù‘Ù ÙÙŠ Ø§Ù„Ø¬Ø¯ÙˆÙ„ Ø£Ø¹Ù„Ø§Ù‡
+      onGenerateRoute: (settings) {
+        Widget page;
+        switch (settings.name) {
+          case '/home':
+            page = const HomeScreen();
+            break;
+          default:
+            page = const HomeScreen();
+        }
+        return PageRouteBuilder(
+          settings: settings,
+          pageBuilder: (_, __, ___) => page,
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 350),
+        );
+      },
+
+      // ÙØ±Ø¶ Ø§ØªØ¬Ø§Ù‡ RTL ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)
+      builder: (context, child) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\main.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\playback_position_manager.dart ==== */
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PlaybackPositionManager {
+  static SharedPreferences? _prefs;
+
+  // Ø¯Ø§Ù„Ø© Ù„ØªÙ‡ÙŠØ¦Ø© Ø§Ù„Ù€ SharedPreferences
+  static Future<void> _initPrefs() async {
+    _prefs ??= await SharedPreferences.getInstance();
+  }
+
+  // Ù…ÙØªØ§Ø­ ÙØ±ÙŠØ¯ Ù„ÙƒÙ„ Ø­Ù„Ù‚Ø©
+  static String _episodeKey(int episodeId) => "episode_$episodeId";
+
+  // Ø­ÙØ¸ Ø§Ù„Ù…ÙˆØ¶Ø¹ (Ø¨Ø§Ù„Ø«ÙˆØ§Ù†ÙŠ)
+  static Future<void> savePosition(int episodeId, Duration position) async {
+    await _initPrefs();
+    _prefs?.setInt(_episodeKey(episodeId), position.inSeconds);
+  }
+
+  // Ø¬Ù„Ø¨ Ø§Ù„Ù…ÙˆØ¶Ø¹ (Ø¨Ø§Ù„Ø«ÙˆØ§Ù†ÙŠ)
+  static Future<Duration> getPosition(int episodeId) async {
+    await _initPrefs();
+    final seconds = _prefs?.getInt(_episodeKey(episodeId)) ?? 0;
+    return Duration(seconds: seconds);
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\playback_position_manager.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\datasources\api_service.dart ==== */
+
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:nb_utils/nb_utils.dart';
+import '../../utils/constants.dart'; // Ensure TOKEN is defined here
+
+class ApiService {
+  static const String _baseUrl = "https://daawah.tv/wp-json/streamit/api/v1/";
+
+  // --- _getRequest Helper (Handles base URL, encoding, optional auth) ---
+  Future<dynamic> _getRequest(String endpoint, {bool requiresAuth = true}) async {
+    final parts = endpoint.split('?');
+    final path = parts[0];
+    final query = parts.length > 1 ? '?${parts[1]}' : '';
+    // Encode path segments individually
+    final encodedPathSegments = path.split('/').map((segment) {
+      // Avoid double-encoding query parameters if accidentally included in path segment
+      if (segment.contains('=')) return segment;
+      return Uri.encodeComponent(segment);
+    }).join('/');
+    final fullUrl = '$_baseUrl$encodedPathSegments$query';
+    final Uri url = Uri.parse(fullUrl);
+    print('Calling API (Encoded): $url');
+
+    final Map<String, String> headers = {
+      'Content-Type': 'application/json; charset=UTF-8',
+      'Accept': 'application/json; charset=UTF-8',
+    };
+
+    if (requiresAuth && getStringAsync(TOKEN).isNotEmpty) {
+      final token = getStringAsync(TOKEN);
+      headers['Authorization'] = 'Bearer $token';
+      print('>>> Sending with Authorization Header');
+    } else if (requiresAuth) {
+      print('>>> Auth required but Token not found');
+      // Let the API handle the 403, don't throw here immediately
+    }
+
+    try {
+      final response = await http.get(url, headers: headers)
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        print('API Auth Error: ${response.statusCode} - ${response.body}');
+        throw Exception("Authentication required or token expired (Status code: ${response.statusCode})");
+      } else {
+        print('API Error: ${response.statusCode} - ${response.body}');
+        try {
+          Map<String, dynamic> errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          throw Exception(errorBody['message'] ?? 'Failed to load data (Status code: ${response.statusCode})');
+        } catch (_) {
+          throw Exception('Failed to load data from API (Status code: ${response.statusCode})');
+        }
+      }
+    } catch (e) {
+      print('Network or parsing error: $e');
+      rethrow; // Re-throw for Bloc/Repository to handle
+    }
+  }
+
+  // --- API Call Functions ---
+
+  Future<Map<String, dynamic>> getHomeDashboard({String type = 'home'}) async {
+    final jsonResponse = await _getRequest('content/dashboard/$type', requiresAuth: false);
+    if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('data')) { return jsonResponse; }
+    else { throw Exception('Invalid data structure for dashboard type $type'); }
+  }
+
+  Future<Map<String, dynamic>> getTvShowDetails(int programId) async {
+    final jsonResponse = await _getRequest('tv-shows/$programId', requiresAuth: false);
+    return jsonResponse as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getSeasonEpisodes(int programId, int seasonId) async {
+    final jsonResponse = await _getRequest('tv-shows/$programId/seasons/$seasonId?limit=200&offset=0', requiresAuth: false);
+    if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('data') && jsonResponse['data'] is Map && jsonResponse['data'].containsKey('episodes')) { return jsonResponse; }
+    else { throw Exception('Invalid data structure for season episodes response'); }
+  }
+
+  Future<Map<String, dynamic>> getEpisodeDetails(int episodeId) async {
+    final jsonResponse = await _getRequest('tv-show/season/episodes/$episodeId', requiresAuth: false);
+    if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('data')) { return jsonResponse; }
+    else { throw Exception('Invalid data structure for episode details response'); }
+  }
+
+  Future<dynamic> getGenreList(int page, int perPage) async {
+    final String correctUrl = 'https://daawah.tv/wp-json/wp/v2/tv_show_genre?page=$page&per_page=$perPage';
+    final Uri url = Uri.parse(correctUrl);
+    print('Calling API (Correct Genre URL): $url');
+    try {
+      final response = await http.get( url, headers: { 'Content-Type': 'application/json; charset=UTF-8', }, ).timeout(const Duration(seconds: 20));
+      if (response.statusCode == 200) { return jsonDecode(utf8.decode(response.bodyBytes)); }
+      else { /* Error Handling */
+        print('API Error (Genres): ${response.statusCode} - ${response.body}'); try { Map<String, dynamic> errorBody = jsonDecode(utf8.decode(response.bodyBytes)); throw Exception(errorBody['message'] ?? 'Failed to load genres (Status code: ${response.statusCode})'); } catch (_) { throw Exception('Failed to load genres from API (Status code: ${response.statusCode})'); }
+      }
+    } catch (e) { /* Error Handling */
+      print('Network or parsing error (Genres): $e'); throw Exception('Failed to connect to the server for genres: $e');
+    }
+  }
+
+  Future<dynamic> getProgramsByGenre(String slug, int page, int perPage) async {
+    // Requires auth (default for _getRequest is true)
+    final jsonResponse = await _getRequest('content/tv_show/genre/$slug?paged=$page&posts_per_page=$perPage');
+    return jsonResponse;
+  }
+
+  // --- ADDED: Function to get WP Episode Details ---
+  Future<dynamic> getWpEpisodeDetails(int episodeId) async {
+    final String wpApiUrl = 'https://daawah.tv/wp-json/wp/v2/episode/$episodeId?_embed=1';
+    final Uri url = Uri.parse(wpApiUrl);
+    print('Calling API (WP Episode Details): $url');
+    try {
+      final response = await http.get( url, headers: { 'Content-Type': 'application/json; charset=UTF-8', }, ).timeout(const Duration(seconds: 20));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      } else {
+        print('API Error (WP Episode): ${response.statusCode} - ${response.body}');
+        return null; // Return null instead of throwing error
+      }
+    } catch (e) {
+      print('Network or parsing error (WP Episode): $e');
+      return null; // Return null on network error
+    }
+  }
+
+  // --- ADDED: Function for Search ---
+  Future<dynamic> searchPrograms(String query, int page, int perPage) async {
+    // No auth required for search
+    final endpoint = 'content/search?search=$query&paged=$page&posts_per_page=$perPage';
+    final jsonResponse = await _getRequest(endpoint, requiresAuth: false);
+    return jsonResponse;
+  }
+// --- End of ApiService class ---
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\datasources\api_service.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\episode_details_data.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+class EpisodeDetailsData extends Equatable {
+  final int id;
+  final String title;
+  final String? urlLink; // Video URL (nullable)
+  final String? embedContent; // Embed code (nullable)
+  final String? episodeChoice; // Type indicator (nullable)
+  final List<dynamic>? sources; // Other sources (nullable list)
+
+  const EpisodeDetailsData({
+    required this.id,
+    required this.title,
+    this.urlLink,
+    this.embedContent,
+    this.episodeChoice,
+    this.sources,
+  });
+
+  // Factory constructor to create an instance from JSON
+  factory EpisodeDetailsData.fromJson(Map<String, dynamic> json) {
+    // Read 'id' safely as num then convert to int
+    num idNum = json['id'] ?? 0;
+
+    return EpisodeDetailsData(
+      id: idNum.toInt(),
+      title: json['title'] as String? ?? '',
+      urlLink: json['url_link'] as String?,
+      embedContent: json['embed_content'] as String?,
+      episodeChoice: json['episode_choice'] as String?,
+      // Read sources as a List<dynamic> if it exists and is a list
+      sources: json['sources'] is List ? List<dynamic>.from(json['sources']) : null,
+    );
+  }
+
+  // Define props for Equatable comparison
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    urlLink,
+    embedContent,
+    episodeChoice,
+    sources,
+  ];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\episode_details_data.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\episode_item.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+class EpisodeItem extends Equatable {
+  final int id; // Kotlin Long maps to Dart int
+  final String title;
+  final String? image; // Nullable String
+  final String? postType; // Nullable String
+  final String? runTime; // Nullable String
+  final String? releaseDate; // Nullable String
+
+  const EpisodeItem({
+    required this.id,
+    required this.title,
+    this.image,
+    this.postType,
+    this.runTime,
+    this.releaseDate,
+  });
+
+  // Ø¯Ø§Ù„Ø© Ù„ØªØ­ÙˆÙŠÙ„ JSON Ø§Ù„Ù‚Ø§Ø¯Ù… Ù…Ù† API Ø¥Ù„Ù‰ ÙƒØ§Ø¦Ù† EpisodeItem
+  factory EpisodeItem.fromJson(Map<String, dynamic> json) {
+    // Ø­Ø§ÙˆÙ„ Ù‚Ø±Ø§Ø¡Ø© id ÙƒÙ€ int Ø£Ùˆ double Ø«Ù… ØªØ­ÙˆÙŠÙ„Ù‡
+    num idNum = json['id'] ?? 0;
+
+    return EpisodeItem(
+      id: idNum.toInt(), // ØªØ­ÙˆÙŠÙ„ num Ø¥Ù„Ù‰ int
+      title: json['title'] as String? ?? '',
+      image: json['image'] as String?, // Ù‚Ø¯ ØªÙƒÙˆÙ† null
+      postType: json['post_type'] as String?,
+      runTime: json['run_time'] as String?,
+      releaseDate: json['release_date'] as String?,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    image,
+    postType,
+    runTime,
+    releaseDate,
+  ];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\episode_item.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\genre_data.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+class GenreData extends Equatable {
+  final int id;
+  final String name;
+  final String slug;
+  final String? genreImage; // Ø±Ø§Ø¨Ø· ØµÙˆØ±Ø© Ø§Ù„ØªØµÙ†ÙŠÙ (Ù‚Ø¯ ÙŠÙƒÙˆÙ† null)
+
+  const GenreData({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.genreImage,
+  });
+
+  factory GenreData.fromJson(Map<String, dynamic> json) {
+    // Ù‚Ø±Ø§Ø¡Ø© Ø§Ù„ØµÙˆØ±Ø© Ø¨Ø£Ù…Ø§Ù†
+    String? imageUrl;
+    if (json['genre_image'] is String && json['genre_image'].isNotEmpty) {
+      imageUrl = json['genre_image'];
+    }
+
+    return GenreData(
+      // Ù‚Ø±Ø§Ø¡Ø© ID Ø¨Ø£Ù…Ø§Ù† ÙƒÙ€ num Ø«Ù… ØªØ­ÙˆÙŠÙ„Ù‡
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? 'ØªØµÙ†ÙŠÙ ØºÙŠØ± Ù…Ø³Ù…Ù‰',
+      slug: json['slug'] as String? ?? '',
+      genreImage: imageUrl,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, slug, genreImage];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\genre_data.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\program_item.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+class ProgramItem extends Equatable {
+  final int id;
+  final String title;
+  // 1. Field is nullable
+  final String? image;
+  final String postType;
+
+  // 2. Constructor parameter 'image' is now optional (no 'required')
+  const ProgramItem({
+    required this.id,
+    required this.title,
+    this.image, // Optional parameter allows null
+    required this.postType,
+  }); // Line 12 area
+
+  factory ProgramItem.fromJson(Map<String, dynamic> json) {
+    // Read ID safely
+    num idNum = json['id'] ?? 0;
+
+    return ProgramItem(
+      id: idNum.toInt(),
+      title: json['title'] as String? ?? '', // Provide default non-null
+      // 3. Cast to String? matches the optional 'image' parameter
+      image: json['image'] as String?, // Line 23 area
+      postType: json['post_type'] as String? ?? '', // Provide default non-null
+    );
+  }
+
+  @override
+  // 4. props list correctly includes the nullable 'image'
+  List<Object?> get props => [id, title, image, postType];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\program_item.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\program_slider.dart ==== */
+
+import 'package:equatable/equatable.dart';
+import 'program_item.dart'; // Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù…ÙˆØ¯Ù„ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬
+
+class ProgramSlider extends Equatable {
+  final String title;
+  final List<ProgramItem> programs;
+
+  const ProgramSlider({
+    required this.title,
+    required this.programs,
+  });
+
+  // Ø¯Ø§Ù„Ø© Ù„ØªØ­ÙˆÙŠÙ„ JSON Ø§Ù„Ù‚Ø§Ø¯Ù… Ù…Ù† API (Ø¯Ø§Ø®Ù„ Ù‚Ø§Ø¦Ù…Ø© 'sliders')
+  factory ProgramSlider.fromJson(Map<String, dynamic> json) {
+    List<ProgramItem> programsList = [];
+    if (json['data'] is List) {
+      programsList = (json['data'] as List)
+          .map((itemJson) => ProgramItem.fromJson(itemJson as Map<String, dynamic>))
+          .toList();
+    }
+
+    // ÙÙŠ Ù…Ù„Ù MainFragment.ktØŒ ÙƒØ§Ù† Ø§Ø³Ù… Ø§Ù„Ø­Ù‚Ù„ 'title'
+    return ProgramSlider(
+      title: json['title'] as String? ?? 'Ù‚Ø³Ù… ØºÙŠØ± Ù…Ø³Ù…Ù‰',
+      programs: programsList,
+    );
+  }
+
+  @override
+  List<Object?> get props => [title, programs];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\program_slider.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\season.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+class Season extends Equatable {
+  final int id;
+  final String name;
+
+  const Season({
+    required this.id,
+    required this.name,
+  });
+
+  // Ø¯Ø§Ù„Ø© Ù„ØªØ­ÙˆÙŠÙ„ JSON Ø§Ù„Ù‚Ø§Ø¯Ù… Ù…Ù† API Ø¥Ù„Ù‰ ÙƒØ§Ø¦Ù† Season
+  // (Ù…ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø®Ù„ Ù‚Ø§Ø¦Ù…Ø© data ÙÙŠ TvShowDetailsResponse)
+  factory Season.fromJson(Map<String, dynamic> json) {
+    return Season(
+      id: json['id'] as int? ?? 0,
+      name: json['name'] as String? ?? '',
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\season.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\models\tv_show_details.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+import 'season.dart'; // Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù†Ù…ÙˆØ°Ø¬ Season Ø§Ù„Ø°ÙŠ Ø¹Ø±ÙÙ†Ø§Ù‡
+
+// Ù…Ù„Ø§Ø­Ø¸Ø©: Cast Ù„Ù… Ù†Ù‚Ù… Ø¨ØªØ¹Ø±ÙŠÙÙ‡ Ø¨Ø¹Ø¯ØŒ Ø³Ù†ØªØ±ÙƒÙ‡ ÙƒÙ€ Map Ù…Ø¤Ù‚ØªØ§Ù‹ Ø£Ùˆ Ù†Ù†Ø´Ø¦ Ù†Ù…ÙˆØ°Ø¬Ø§Ù‹ Ø¨Ø³ÙŠØ·Ø§Ù‹ Ù„Ù‡ Ù„Ø§Ø­Ù‚Ø§Ù‹.
+
+class TvShowDetails extends Equatable {
+  final int id; // Kotlin Long maps to Dart int
+  final String title;
+  final String image;
+  final String postType;
+  final String description;
+  final List<String> genre;
+  // final List<Cast> casts; // Ø³Ù†ØªØ±ÙƒÙ‡Ø§ Ù…Ø¤Ù‚ØªØ§Ù‹
+  final List<Season> seasons;
+  final int seasonsCount; // Ø¹Ø¯Ø¯ Ø§Ù„Ù…ÙˆØ§Ø³Ù… Ù…Ù† Ø­Ù‚Ù„ count
+
+  const TvShowDetails({
+    required this.id,
+    required this.title,
+    required this.image,
+    required this.postType,
+    required this.description,
+    required this.genre,
+    // required this.casts,
+    required this.seasons,
+    required this.seasonsCount,
+  });
+
+  // Ø¯Ø§Ù„Ø© Ù„ØªØ­ÙˆÙŠÙ„ JSON Ø§Ù„Ù‚Ø§Ø¯Ù… Ù…Ù† API Ø¥Ù„Ù‰ ÙƒØ§Ø¦Ù† TvShowDetails
+  // (Ù…ÙˆØ¬ÙˆØ¯ Ø¯Ø§Ø®Ù„ Ø­Ù‚Ù„ 'details' ÙÙŠ TvShowData -> TvShowDetailsResponse)
+  factory TvShowDetails.fromJson(Map<String, dynamic> json) {
+    // Ù‚Ø±Ø§Ø¡Ø© id ÙƒÙ€ num Ø«Ù… ØªØ­ÙˆÙŠÙ„Ù‡
+    num idNum = json['id'] ?? 0;
+
+    // Ù‚Ø±Ø§Ø¡Ø© Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…ÙˆØ§Ø³Ù… ÙˆØªØ­ÙˆÙŠÙ„Ù‡Ø§
+    List<Season> seasonsList = [];
+    if (json['seasons'] != null && json['seasons']['data'] is List) {
+      seasonsList = (json['seasons']['data'] as List)
+          .map((seasonJson) => Season.fromJson(seasonJson))
+          .toList();
+    }
+    int count = json['seasons'] != null && json['seasons']['count'] is int
+        ? json['seasons']['count'] as int
+        : 0;
+
+
+    // Ù‚Ø±Ø§Ø¡Ø© Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø£Ù†ÙˆØ§Ø¹ ÙˆØªØ­ÙˆÙŠÙ„Ù‡Ø§
+    List<String> genreList = [];
+    if (json['genre'] is List) {
+      genreList = (json['genre'] as List).map((g) => g.toString()).toList();
+    }
+
+    // TODO: Ø¥Ø¶Ø§ÙØ© Ù‚Ø±Ø§Ø¡Ø© Ù‚Ø§Ø¦Ù…Ø© Casts Ù„Ø§Ø­Ù‚Ø§Ù‹ Ø¥Ø°Ø§ Ø§Ø­ØªØ¬Ù†Ø§ Ø¥Ù„ÙŠÙ‡Ø§
+
+    return TvShowDetails(
+      id: idNum.toInt(),
+      title: json['title'] as String? ?? '',
+      image: json['image'] as String? ?? '',
+      postType: json['post_type'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      genre: genreList,
+      seasons: seasonsList,
+      seasonsCount: count,
+      // casts: [], // Ù‚Ø§Ø¦Ù…Ø© ÙØ§Ø±ØºØ© Ù…Ø¤Ù‚ØªØ§Ù‹
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    image,
+    postType,
+    description,
+    genre,
+    seasons,
+    seasonsCount,
+    // casts,
+  ];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\models\tv_show_details.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\data\repositories\program_repository.dart ==== */
+
+import '../datasources/api_service.dart';
+import '../models/episode_details_data.dart';
+import '../models/episode_item.dart';
+import '../models/genre_data.dart';
+import '../models/program_item.dart'; // Make sure this is imported
+import '../models/program_slider.dart';
+import '../models/tv_show_details.dart';
+
+class ProgramRepository {
+  final ApiService _apiService = ApiService();
+
+  // --- getHomeContent ---
+  Future<Map<String, dynamic>> getHomeContent() async {
+    try {
+      final List<ProgramItem> staticItems = [
+        ProgramItem(id: -1, title: "Ø§Ù„Ø¨Ø« Ø§Ù„Ù…Ø¨Ø§Ø´Ø±", image: "https://daawah.tv/live.png", postType: "live_stream"),
+        ProgramItem(id: -2, title: "Ø®Ø±ÙŠØ·Ø© Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬", image: "https://daawah.tv/privacy.png", postType: "programs_list"),
+        ProgramItem(id: -3, title: "Ø³ÙŠØ§Ø³Ø© Ø§Ù„Ø®ØµÙˆØµÙŠØ©", image: "https://daawah.tv/privacy.png", postType: "privacy_policy"),
+      ];
+      final Map<String, dynamic> response = await _apiService.getHomeDashboard(type: 'home');
+      List<ProgramSlider> dynamicSliders = [];
+      if (response['data'] != null && response['data']['sliders'] is List) {
+        dynamicSliders = (response['data']['sliders'] as List)
+            .map((sliderJson) => ProgramSlider.fromJson(sliderJson as Map<String, dynamic>))
+            .toList();
+      }
+      return {'static_items': staticItems, 'dynamic_sliders': dynamicSliders,};
+    } catch (e) {
+      print('Error in getHomeContent: $e');
+      throw Exception('Failed to load home content: $e');
+    }
+  }
+
+  // --- getDashboardSlidersByType ---
+  Future<List<ProgramSlider>> getDashboardSlidersByType(String type) async {
+    try {
+      final Map<String, dynamic> response = await _apiService.getHomeDashboard(type: type);
+      List<ProgramSlider> dynamicSliders = [];
+      if (response['data'] != null && response['data']['sliders'] is List) {
+        dynamicSliders = (response['data']['sliders'] as List)
+            .map((sliderJson) => ProgramSlider.fromJson(sliderJson as Map<String, dynamic>))
+            .toList();
+      }
+      return dynamicSliders;
+    } catch (e) {
+      print('Error in getDashboardSlidersByType for type $type: $e');
+      throw Exception('Failed to load dashboard content for type $type: $e');
+    }
+  }
+
+  // --- getProgramDetails ---
+  Future<TvShowDetails> getProgramDetails(int programId) async {
+    try {
+      final Map<String, dynamic> response = await _apiService.getTvShowDetails(programId);
+      if (response['data'] != null && response['data']['details'] is Map<String, dynamic>) {
+        return TvShowDetails.fromJson(response['data']['details']);
+      } else if (response['data'] is Map<String, dynamic>){
+        return TvShowDetails.fromJson(response['data']);
+      } else {
+        throw Exception('Invalid data structure for program details');
+      }
+    } catch (e) {
+      print('Error in getProgramDetails: $e');
+      throw Exception('Failed to load program details: $e');
+    }
+  }
+
+  // --- getSeasonEpisodes ---
+  Future<List<EpisodeItem>> getSeasonEpisodes(int programId, int seasonId) async {
+    try {
+      final Map<String, dynamic> response = await _apiService.getSeasonEpisodes(programId, seasonId);
+      if (response['data'] != null && response['data']['episodes'] is List) {
+        final List<dynamic> episodesJson = response['data']['episodes'];
+        return episodesJson
+            .map((json) => EpisodeItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        print('Unexpected structure for season episodes: $response');
+        return [];
+      }
+    } catch (e) {
+      print('Error in getSeasonEpisodes: $e');
+      throw Exception('Failed to load season episodes: $e');
+    }
+  }
+
+  // --- getEpisodeDetails ---
+  Future<EpisodeDetailsData> getEpisodeDetails(int episodeId) async {
+    try {
+      final Map<String, dynamic> response = await _apiService.getEpisodeDetails(episodeId);
+      if (response['data'] is Map<String, dynamic>) {
+        return EpisodeDetailsData.fromJson(response['data']);
+      } else {
+        throw Exception('Invalid data structure for episode details');
+      }
+    } catch (e) {
+      print('Error in getEpisodeDetails: $e');
+      throw Exception('Failed to load episode details: $e');
+    }
+  }
+
+  // --- getGenreList ---
+  Future<List<GenreData>> getGenreList({int page = 1, int perPage = 50}) async { // Increased perPage
+    try {
+      final response = await _apiService.getGenreList(page, perPage);
+      // WP API returns a direct list
+      if (response is List) {
+        return response
+            .map((json) => GenreData.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      // Streamit API might return { data: [...] } - handle if necessary
+      else if (response is Map<String, dynamic> && response.containsKey('data') && response['data'] is List) {
+        final List<dynamic> genresJson = response['data'];
+        return genresJson.map((json) => GenreData.fromJson(json as Map<String, dynamic>)).toList();
+      }
+      else {
+        throw Exception('Invalid data structure for genre list');
+      }
+    } catch (e) {
+      print('Error in getGenreList: $e');
+      throw Exception('Failed to load genres: $e');
+    }
+  }
+
+  // --- getProgramsByGenre ---
+  Future<List<ProgramItem>> getProgramsByGenre({required String slug, int page = 1, int perPage = 15}) async {
+    try {
+      final response = await _apiService.getProgramsByGenre(slug, page, perPage);
+      // Streamit API returns { data: [...] }
+      if (response is Map<String, dynamic> && response.containsKey('data') && response['data'] is List) {
+        final List<dynamic> programsJson = response['data'];
+        return programsJson
+            .map((json) => ProgramItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        print('Unexpected structure for programs by genre: $response');
+        throw Exception('Invalid data structure for programs by genre');
+      }
+    } catch (e) {
+      print('Error in getProgramsByGenre for slug $slug: $e');
+      rethrow;
+    }
+  }
+
+  // --- getEpisodeLandscapeImageUrl ---
+  Future<String?> getEpisodeLandscapeImageUrl(int episodeId) async {
+    try {
+      final response = await _apiService.getWpEpisodeDetails(episodeId);
+      if (response != null && response is Map<String, dynamic> && response.containsKey('_embedded')) {
+        final embedded = response['_embedded'] as Map<String, dynamic>?;
+        if (embedded != null && embedded.containsKey('wp:featuredmedia')) {
+          final featuredMediaList = embedded['wp:featuredmedia'] as List<dynamic>?;
+          if (featuredMediaList != null && featuredMediaList.isNotEmpty) {
+            final mediaDetails = featuredMediaList[0]['media_details'] as Map<String, dynamic>?;
+            if (mediaDetails != null && mediaDetails.containsKey('sizes')) {
+              final sizes = mediaDetails['sizes'] as Map<String, dynamic>?;
+              if (sizes != null) {
+                final landscapeSize = sizes['medium_large'] ?? sizes['large'] ?? sizes['full'];
+                if (landscapeSize != null && landscapeSize is Map<String, dynamic> && landscapeSize.containsKey('source_url')) {
+                  return landscapeSize['source_url'] as String?;
+                }
+              }
+            }
+          }
+        }
+      }
+      print("Landscape image URL not found in WP API response for episode $episodeId");
+      return null;
+    } catch (e) {
+      print('Error in getEpisodeLandscapeImageUrl for episode $episodeId: $e');
+      return null;
+    }
+  }
+
+  // --- ADD THIS FUNCTION ---
+  Future<List<ProgramItem>> searchPrograms({
+    required String query,
+    int page = 1,
+    int perPage = 15, // Match Bloc
+  }) async {
+    try {
+      final response = await _apiService.searchPrograms(query, page, perPage);
+      // Check response structure (likely { data: [...] } based on PHP code)
+      if (response is Map<String, dynamic> && response.containsKey('data') && response['data'] is List) {
+        final List<dynamic> programsJson = response['data'];
+        return programsJson
+            .map((json) => ProgramItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      // Fallback: If it returns a direct list
+      else if (response is List) {
+        return response
+            .map((json) => ProgramItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        print('Unexpected structure for search results: $response');
+        throw Exception('Invalid data structure for search results');
+      }
+    } catch (e) {
+      print('Error in searchPrograms for query "$query": $e');
+      rethrow; // Re-throw for Bloc to handle
+    }
+  }
+// --- End of ProgramRepository class ---
+}
+
+/* ==== END FILE: C:\daawah_app\lib\data\repositories\program_repository.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\local\app_localizations.dart ==== */
+
+import 'package:flutter/material.dart';
+// (ØªØ£ÙƒØ¯ Ù…Ù† Ø­Ø°Ù 'import ../main.dart';)
+import 'base_language.dart';
+import 'language_ar.dart';
+
+class AppLocalizations extends LocalizationsDelegate<BaseLanguage> {
+  const AppLocalizations();
+
+  static const LocalizationsDelegate<BaseLanguage> delegate = AppLocalizations();
+
+  @override
+  bool isSupported(Locale locale) => ['ar'].contains(locale.languageCode);
+
+  @override
+  Future<BaseLanguage> load(Locale locale) async {
+    // Ù‚Ù… Ø¨ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù„ØºØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© ÙˆØ¥Ø±Ø¬Ø§Ø¹Ù‡Ø§ Ù…Ø¨Ø§Ø´Ø±Ø©
+    return LanguageAr();
+  }
+
+  @override
+  bool shouldReload(LocalizationsDelegate<BaseLanguage> old) => false;
+}
+
+/* ==== END FILE: C:\daawah_app\lib\local\app_localizations.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\local\base_language.dart ==== */
+
+import 'package:flutter/material.dart';
+
+// Ø§Ù„ÙƒÙ„Ø§Ø³ Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ Ù„Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù„ØºØ§Øª (Ø³ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø§Ù„Ù†ØµÙˆØµ Ø§Ù„Ù…ØªØ±Ø¬Ù…Ø©)
+abstract class BaseLanguage {
+  // Ù…Ø«Ø§Ù„ Ù„Ù†Øµ (Ø³ÙŠØªÙ… Ø§Ø³ØªØ®Ø¯Ø§Ù…Ù‡ Ù„Ø§Ø­Ù‚Ø§Ù‹ ÙÙŠ Ø§Ù„ÙˆØ§Ø¬Ù‡Ø§Øª)
+  String get appName;
+  String get loading;
+  String get archive;
+  // Ø£Ø¶Ù Ø§Ù„Ù†ØµÙˆØµ Ø§Ù„Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§
+
+  // ÙŠÙ…ÙƒÙ† Ø¥Ø¶Ø§ÙØ© Ø¯Ø§Ù„Ø© Ù„ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø®Ø§ØµØ© Ø¨Ø§Ù„Ù„ØºØ©
+  static BaseLanguage of(BuildContext context) => Localizations.of<BaseLanguage>(context, BaseLanguage)!;
+}
+
+/* ==== END FILE: C:\daawah_app\lib\local\base_language.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\local\language_ar.dart ==== */
+
+import 'base_language.dart';
+
+// ØªØ¹Ø±ÙŠÙ Ø§Ù„Ù†ØµÙˆØµ Ø¨Ø§Ù„Ù„ØºØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©
+class LanguageAr extends BaseLanguage {
+  @override String get appName => "ØªØ·Ø¨ÙŠÙ‚ Ø¯Ø¹ÙˆØ©";
+  @override String get loading => "Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ù…ÙŠÙ„...";
+  @override String get archive => "Ø§Ù„Ø£Ø±Ø´ÙŠÙ";
+// Ø£Ø¶Ù Ø§Ù„ØªØ±Ø¬Ù…Ø§Øª Ø§Ù„Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§
+}
+
+/* ==== END FILE: C:\daawah_app\lib\local\language_ar.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\local\language_en.dart ==== */
+
+import 'base_language.dart';
+
+// ØªØ¹Ø±ÙŠÙ Ø§Ù„Ù†ØµÙˆØµ Ø¨Ø§Ù„Ù„ØºØ© Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠØ©
+class LanguageEn extends BaseLanguage {
+  @override String get appName => "Daawah App";
+  @override String get loading => "Loading...";
+  @override String get archive => "Archive";
+// Ø£Ø¶Ù Ø§Ù„ØªØ±Ø¬Ù…Ø§Øª Ø§Ù„Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§
+}
+
+/* ==== END FILE: C:\daawah_app\lib\local\language_en.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\home\home_bloc.dart ==== */
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../data/repositories/program_repository.dart';
+import 'home_event.dart';
+import 'home_state.dart';
+import '../../../data/models/program_item.dart';
+import '../../../data/models/program_slider.dart';
+
+class HomeBloc extends Bloc<HomeEvent, HomeState> {
+  final ProgramRepository _programRepository;
+
+  HomeBloc({required ProgramRepository programRepository})
+      : _programRepository = programRepository,
+        super(HomeInitial()) {
+
+    on<FetchHomeContent>(_onFetchHomeContent);
+  }
+
+  Future<void> _onFetchHomeContent(
+      FetchHomeContent event,
+      Emitter<HomeState> emit,
+      ) async {
+    emit(HomeLoading());
+    try {
+      final homeContent = await _programRepository.getHomeContent();
+
+      final List<ProgramItem> staticItems = homeContent['static_items'] as List<ProgramItem>;
+      final List<ProgramSlider> dynamicSliders = homeContent['dynamic_sliders'] as List<ProgramSlider>;
+
+      emit(HomeLoadSuccess(
+        staticItems: staticItems,
+        dynamicSliders: dynamicSliders,
+      ));
+    } catch (e) {
+      emit(HomeLoadFailure(error: e.toString()));
+    }
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\home\home_bloc.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\home\home_event.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+abstract class HomeEvent extends Equatable {
+  const HomeEvent();
+
+  @override
+  List<Object> get props => [];
+}
+
+// Event Ù„Ø¥Ø®Ø¨Ø§Ø± Ø§Ù„Ù€ BLoC Ø£Ù† ÙŠØ¨Ø¯Ø£ Ø¬Ù„Ø¨ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+class FetchHomeContent extends HomeEvent {}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\home\home_event.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\home\home_state.dart ==== */
+
+import 'package:equatable/equatable.dart';
+import '../../../data/models/program_item.dart';
+import '../../../data/models/program_slider.dart';
+
+abstract class HomeState extends Equatable {
+  const HomeState();
+
+  @override
+  List<Object> get props => [];
+}
+
+class HomeInitial extends HomeState {}
+
+class HomeLoading extends HomeState {}
+
+class HomeLoadSuccess extends HomeState {
+  final List<ProgramItem> staticItems;
+  final List<ProgramSlider> dynamicSliders;
+
+  const HomeLoadSuccess({
+    required this.staticItems,
+    required this.dynamicSliders,
+  });
+
+  @override
+  List<Object> get props => [staticItems, dynamicSliders];
+}
+
+class HomeLoadFailure extends HomeState {
+  final String error;
+
+  const HomeLoadFailure({required this.error});
+
+  @override
+  List<Object> get props => [error];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\home\home_state.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\search\search_bloc.dart ==== */
+
+import 'dart:async';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:stream_transform/stream_transform.dart';
+import '../../../data/models/program_item.dart';
+import '../../../data/repositories/program_repository.dart';
+import 'search_event.dart';
+import 'search_state.dart';
+
+// Debounce duration
+const _duration = Duration(milliseconds: 500);
+
+// Debounce transformer
+EventTransformer<Event> debounce<Event>(Duration duration) {
+  return (events, mapper) => events.debounce(duration).switchMap(mapper);
+}
+
+
+class SearchBloc extends Bloc<SearchEvent, SearchState> {
+  final ProgramRepository _repository;
+  String _currentQuery = '';
+  int _currentPage = 1;
+  final int _perPage = 15; // Number of items per page
+
+  SearchBloc(this._repository) : super(SearchInitial()) {
+    on<SearchQueryChanged>(_onSearchQueryChanged, transformer: debounce(_duration));
+    on<LoadMoreSearchResults>(_onLoadMoreSearchResults);
+    on<ClearSearch>(_onClearSearch);
+  }
+
+  // Handle new search query
+  Future<void> _onSearchQueryChanged(SearchQueryChanged event, Emitter<SearchState> emit) async {
+    final query = event.query.trim();
+    // Ø¥Ø°Ø§ Ù„Ù… ÙŠØªØºÙŠØ± Ø§Ù„Ù†Øµ (Ù…Ø«Ù„ Ø§Ù„Ù…Ø³Ø§ÙØ§Øª Ø§Ù„Ø²Ø§Ø¦Ø¯Ø©)ØŒ Ù„Ø§ ØªÙ‚Ù… Ø¨Ø§Ù„Ø¨Ø­Ø« Ù…Ø±Ø© Ø£Ø®Ø±Ù‰
+    if (query == _currentQuery && state is! SearchInitial) return;
+
+    _currentQuery = query;
+    _currentPage = 1; // Reset page number for new query
+
+    if (query.isEmpty) {
+      emit(SearchInitial()); // Show initial state if query is empty
+      return;
+    }
+
+    emit(SearchLoading());
+    try {
+      // --- Ø§Ù„ØªØµØ­ÙŠØ­ Ù‡Ù†Ø§: Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø¯Ø§Ù„Ø© Ø§Ù„Ø¨Ø­Ø« Ø§Ù„ØµØ­ÙŠØ­Ø© ---
+      final programs = await _repository.searchPrograms(
+        query: query,
+        page: _currentPage,
+        perPage: _perPage,
+      );
+      // ---------------------------------------------
+
+      emit(SearchSuccess(
+        programs: programs,
+        hasReachedMax: programs.length < _perPage,
+      ));
+    } catch (e) {
+      emit(SearchFailure(e.toString()));
+    }
+  }
+
+  // Handle loading more results
+  Future<void> _onLoadMoreSearchResults(LoadMoreSearchResults event, Emitter<SearchState> emit) async {
+    // Ensure we are in a success state and haven't reached the end
+    if (state is SearchSuccess && !(state as SearchSuccess).hasReachedMax) {
+      final currentState = state as SearchSuccess;
+      _currentPage++; // Increment page number
+
+      try {
+        // --- Ø§Ù„ØªØµØ­ÙŠØ­ Ù‡Ù†Ø§: Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø¯Ø§Ù„Ø© Ø§Ù„Ø¨Ø­Ø« Ø§Ù„ØµØ­ÙŠØ­Ø© ---
+        final newPrograms = await _repository.searchPrograms(
+          query: _currentQuery,
+          page: _currentPage,
+          perPage: _perPage,
+        );
+        // ---------------------------------------------
+
+        emit(currentState.copyWith(
+          programs: List.of(currentState.programs)..addAll(newPrograms),
+          hasReachedMax: newPrograms.length < _perPage,
+        ));
+      } catch (e) {
+        print("Error loading more search results: $e");
+        // ÙŠÙ…ÙƒÙ† Ø¥Ø¨Ù‚Ø§Ø¡ Ø§Ù„Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ© Ø£Ùˆ Ø¥Ø±Ø³Ø§Ù„ Ø®Ø·Ø£ Ø¬Ø²Ø¦ÙŠØŒ Ù…Ø¹ ÙˆØ¶Ø¹ Ø¹Ù„Ø§Ù…Ø© hasReachedMax
+        // Ù„ØªØ¬Ù†Ø¨ Ù…Ø­Ø§ÙˆÙ„Ø© Ø§Ù„ØªØ­Ù…ÙŠÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ Ø¹Ù†Ø¯ Ø­Ø¯ÙˆØ« Ø®Ø·Ø£
+        emit(currentState.copyWith(hasReachedMax: true));
+      }
+    }
+  }
+
+  // Handle clearing the search
+  void _onClearSearch(ClearSearch event, Emitter<SearchState> emit) {
+    _currentQuery = '';
+    _currentPage = 1;
+    emit(SearchInitial());
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\search\search_bloc.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\search\search_event.dart ==== */
+
+import 'package:equatable/equatable.dart';
+
+abstract class SearchEvent extends Equatable {
+  const SearchEvent();
+
+  @override
+  List<Object> get props => [];
+}
+
+// Event triggered when the search query changes
+class SearchQueryChanged extends SearchEvent {
+  final String query;
+  const SearchQueryChanged(this.query);
+
+  @override
+  List<Object> get props => [query];
+}
+
+// Event to load the next page of results (for pagination)
+class LoadMoreSearchResults extends SearchEvent {}
+
+// Event to clear the search results
+class ClearSearch extends SearchEvent {}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\search\search_event.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\bloc\search\search_state.dart ==== */
+
+import 'package:equatable/equatable.dart';
+import '../../../data/models/program_item.dart'; // Use ProgramItem for results
+
+abstract class SearchState extends Equatable {
+  const SearchState();
+
+  @override
+  List<Object> get props => [];
+}
+
+// Initial state before any search
+class SearchInitial extends SearchState {}
+
+// State while loading results
+class SearchLoading extends SearchState {}
+
+// State when results are loaded successfully
+class SearchSuccess extends SearchState {
+  final List<ProgramItem> programs;
+  final bool hasReachedMax; // Flag for pagination
+
+  const SearchSuccess({required this.programs, required this.hasReachedMax});
+
+  SearchSuccess copyWith({
+    List<ProgramItem>? programs,
+    bool? hasReachedMax,
+  }) {
+    return SearchSuccess(
+      programs: programs ?? this.programs,
+      hasReachedMax: hasReachedMax ?? this.hasReachedMax,
+    );
+  }
+
+  @override
+  List<Object> get props => [programs, hasReachedMax];
+}
+
+// State when an error occurs
+class SearchFailure extends SearchState {
+  final String error;
+  const SearchFailure(this.error);
+
+  @override
+  List<Object> get props => [error];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\bloc\search\search_state.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\archive\archive_screen.dart ==== */
+
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\archive\archive_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\categories\categories_screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../data/models/genre_data.dart';
+import '../../../data/repositories/program_repository.dart';
+import '../../widgets/genre_card.dart'; // Ø§Ø³ØªÙŠØ±Ø§Ø¯ ÙƒØ§Ø±Øª Ø§Ù„ØªØµÙ†ÙŠÙ
+import 'category_browse_screen.dart'; // Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø´Ø§Ø´Ø© ØªØµÙØ­ Ø§Ù„ØªØµÙ†ÙŠÙ (Ø³Ù†Ù†Ø´Ø¦Ù‡Ø§ Ù„Ø§Ø­Ù‚Ø§Ù‹)
+
+// --- Bloc Events ---
+abstract class CategoriesEvent {}
+class FetchCategories extends CategoriesEvent {}
+
+// --- Bloc States ---
+abstract class CategoriesState {}
+class CategoriesInitial extends CategoriesState {}
+class CategoriesLoading extends CategoriesState {}
+class CategoriesLoadSuccess extends CategoriesState {
+  final List<GenreData> genres;
+  CategoriesLoadSuccess(this.genres);
+}
+class CategoriesLoadFailure extends CategoriesState {
+  final String error;
+  CategoriesLoadFailure(this.error);
+}
+
+// --- Bloc Logic ---
+class CategoriesBloc extends Bloc<CategoriesEvent, CategoriesState> {
+  final ProgramRepository _repository;
+
+  CategoriesBloc(this._repository) : super(CategoriesInitial()) {
+    on<FetchCategories>(_onFetchCategories);
+  }
+
+  Future<void> _onFetchCategories(FetchCategories event, Emitter<CategoriesState> emit) async {
+    emit(CategoriesLoading());
+    try {
+      // Ø¬Ù„Ø¨ Ø§Ù„ØµÙØ­Ø© Ø§Ù„Ø£ÙˆÙ„Ù‰ ÙÙ‚Ø· Ø­Ø§Ù„ÙŠØ§Ù‹ (ÙŠÙ…ÙƒÙ† Ø¥Ø¶Ø§ÙØ© pagination Ù„Ø§Ø­Ù‚Ø§Ù‹)
+      final genres = await _repository.getGenreList(page: 1, perPage: 50); // Ø¬Ù„Ø¨ Ø¹Ø¯Ø¯ ÙƒØ¨ÙŠØ± Ù…Ø¨Ø¯Ø¦ÙŠØ§Ù‹
+      emit(CategoriesLoadSuccess(genres));
+    } catch (e) {
+      emit(CategoriesLoadFailure(e.toString()));
+    }
+  }
+}
+
+
+// --- Ø§Ù„Ø´Ø§Ø´Ø© (Widget) ---
+class CategoriesScreen extends StatelessWidget {
+  const CategoriesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      // Ø§Ø³ØªØ®Ø¯Ø§Ù… RepositoryProvider Ù„Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø§Ù„Ø±ÙŠØ¨Ùˆ
+      create: (context) => CategoriesBloc(RepositoryProvider.of<ProgramRepository>(context))
+        ..add(FetchCategories()), // Ø¨Ø¯Ø¡ Ø¬Ù„Ø¨ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+      child: Scaffold(
+        // Ù„Ø§ Ù†Ø­ØªØ§Ø¬ AppBar Ù‡Ù†Ø§ Ù„Ø£Ù†Ù‡Ø§ Ø³ØªÙƒÙˆÙ† Ø¬Ø²Ø¡Ø§Ù‹ Ù…Ù† HomeScreen
+        backgroundColor: Colors.transparent, // Ù„Ø¬Ø¹Ù„ Ø®Ù„ÙÙŠØ© HomeScreen ØªØ¸Ù‡Ø±
+        body: BlocBuilder<CategoriesBloc, CategoriesState>(
+          builder: (context, state) {
+            if (state is CategoriesLoading || state is CategoriesInitial) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state is CategoriesLoadFailure) {
+              return Center(child: Text('Ø®Ø·Ø£: ${state.error}', style: const TextStyle(color: Colors.white70)));
+            }
+            if (state is CategoriesLoadSuccess) {
+              if (state.genres.isEmpty) {
+                return const Center(child: Text('Ù„Ø§ ØªÙˆØ¬Ø¯ ØªØµÙ†ÙŠÙØ§Øª Ù…ØªØ§Ø­Ø©.', style: TextStyle(color: Colors.white70)));
+              }
+
+              // Ø¹Ø±Ø¶ Ø§Ù„ØªØµÙ†ÙŠÙØ§Øª ÙÙŠ Ø´Ø¨ÙƒØ©
+              return GridView.builder(
+                padding: EdgeInsets.only(
+                  left: 16.0,
+                  right: 16.0,
+                  top: kToolbarHeight + MediaQuery.of(context).padding.top + 16.0, // Ù„ØªØ¬Ù†Ø¨ AppBar
+                  bottom: 16.0,
+                ),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, // Ø¹Ø¯Ø¯ Ø§Ù„Ø£Ø¹Ù…Ø¯Ø©
+                  childAspectRatio: 1.1, // Ø§Ù„Ù†Ø³Ø¨Ø© Ø¨ÙŠÙ† Ø§Ù„Ø¹Ø±Ø¶ ÙˆØ§Ù„Ø§Ø±ØªÙØ§Ø¹
+                  crossAxisSpacing: 12.0,
+                  mainAxisSpacing: 12.0,
+                ),
+                itemCount: state.genres.length,
+                itemBuilder: (context, index) {
+                  final genre = state.genres[index];
+                  return GenreCard(
+                    genre: genre,
+                    onTap: () {
+                      // Ø§Ù„Ø§Ù†ØªÙ‚Ø§Ù„ Ù„Ø´Ø§Ø´Ø© ØªØµÙØ­ Ø§Ù„ØªØµÙ†ÙŠÙ
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CategoryBrowseScreen(
+                            genreSlug: genre.slug,
+                            genreName: genre.name,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+              return const Center(child: Text('Ø­Ø§Ù„Ø© ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙØ©', style: TextStyle(color: Colors.black)));
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\categories\categories_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\categories\category_browse_screen.dart ==== */
+
+// ... (imports Ùˆ Bloc ÙƒÙ…Ø§ Ù‡Ùˆ)
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+// ... (Ø¨Ø§Ù‚ÙŠ imports)
+import '../../../data/models/program_item.dart';
+import '../../../data/repositories/program_repository.dart';
+import '../../widgets/program_card.dart';
+import '../program_detail/program_detail_screen.dart';
+abstract class CategoryBrowseEvent {}
+class FetchProgramsByGenre extends CategoryBrowseEvent { final String slug; FetchProgramsByGenre(this.slug); }
+abstract class CategoryBrowseState {}
+class CategoryBrowseInitial extends CategoryBrowseState {}
+class CategoryBrowseLoading extends CategoryBrowseState {}
+class CategoryBrowseLoadSuccess extends CategoryBrowseState { final List<ProgramItem> programs; CategoryBrowseLoadSuccess(this.programs); }
+class CategoryBrowseLoadFailure extends CategoryBrowseState { final String error; CategoryBrowseLoadFailure(this.error); }
+class CategoryBrowseBloc extends Bloc<CategoryBrowseEvent, CategoryBrowseState> { final ProgramRepository _repository; CategoryBrowseBloc(this._repository) : super(CategoryBrowseInitial()) { on<FetchProgramsByGenre>(_onFetchProgramsByGenre); } Future<void> _onFetchProgramsByGenre(FetchProgramsByGenre event, Emitter<CategoryBrowseState> emit) async { emit(CategoryBrowseLoading()); try { final programs = await _repository.getProgramsByGenre(slug: event.slug, page: 1); emit(CategoryBrowseLoadSuccess(programs)); } catch (e) { emit(CategoryBrowseLoadFailure(e.toString())); } } }
+
+
+class CategoryBrowseScreen extends StatelessWidget {
+  final String genreSlug;
+  final String genreName;
+
+  const CategoryBrowseScreen({
+    super.key,
+    required this.genreSlug,
+    required this.genreName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => CategoryBrowseBloc(RepositoryProvider.of<ProgramRepository>(context))
+        ..add(FetchProgramsByGenre(genreSlug)),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(genreName),
+        ),
+        body: BlocBuilder<CategoryBrowseBloc, CategoryBrowseState>(
+          builder: (context, state) {
+            if (state is CategoryBrowseLoading || state is CategoryBrowseInitial) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state is CategoryBrowseLoadFailure) {
+              return Center(child: Text('Ø®Ø·Ø£: ${state.error}'));
+            }
+            if (state is CategoryBrowseLoadSuccess) {
+              if (state.programs.isEmpty) {
+                return const Center(child: Text('Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¨Ø±Ø§Ù…Ø¬ ÙÙŠ Ù‡Ø°Ø§ Ø§Ù„ØªØµÙ†ÙŠÙ Ø­Ø§Ù„ÙŠØ§Ù‹.'));
+              }
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(12.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  // --- Ø§Ù„ØªØ¹Ø¯ÙŠÙ„Ø§Øª Ù‡Ù†Ø§ ---
+                  childAspectRatio: 0.65, // <-- ØªÙ‚Ù„ÙŠÙ„ Ø§Ù„Ù†Ø³Ø¨Ø© Ø¨Ø´ÙƒÙ„ Ù…Ù„Ø­ÙˆØ¸ (ÙƒØ§Ù†Øª 2/3 â‰ˆ 0.67)
+                  crossAxisSpacing: 12.0,
+                  mainAxisSpacing: 16.0, // <-- Ø²ÙŠØ§Ø¯Ø© Ø§Ù„ØªØ¨Ø§Ø¹Ø¯ Ø§Ù„Ø±Ø£Ø³ÙŠ
+                  // --------------------
+                ),
+                itemCount: state.programs.length,
+                itemBuilder: (context, index) {
+                  final program = state.programs[index];
+                  return ProgramCard(
+                    program: program,
+                    // ØªØ£ÙƒØ¯ Ù…Ù† Ø£Ù† ProgramCard Ù„Ø§ ØªØ­Ø¯Ø¯ Ù†Ø³Ø¨Ø© Ø§Ø±ØªÙØ§Ø¹/Ø¹Ø±Ø¶ Ø«Ø§Ø¨ØªØ© Ù„Ù„ØµÙˆØ±Ø©
+                    // Ø¨Ù„ ØªØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ù…Ø³Ø§Ø­Ø© Ø§Ù„Ù…ØªØ§Ø­Ø© Ù…Ù† GridView
+                    aspectRatio: 3 / 4, // Ø£Ùˆ Ø£Ø²Ù„ Ù‡Ø°Ù‡ Ø¥Ø°Ø§ ÙƒØ§Ù†Øª Ø§Ù„Ø¨Ø·Ø§Ù‚Ø© Ù…Ø±Ù†Ø©
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProgramDetailScreen(programId: program.id),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+            return const Center(child: Text('Ø­Ø§Ù„Ø© ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙØ©'));
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\categories\category_browse_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\home\home_screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:convex_bottom_bar/convex_bottom_bar.dart';
+
+import '../../../data/models/program_item.dart';
+import '../../../data/repositories/program_repository.dart';
+
+import '../../bloc/home/home_bloc.dart';
+import '../../bloc/home/home_event.dart';
+import '../../bloc/home/home_state.dart';
+
+import '../../widgets/horizontal_program_row.dart';
+// import '../../widgets/live_stream_embed_widget.dart'; // <-- ØªÙ… Ø­Ø°Ù Ù‡Ø°Ø§
+import '../live_stream/live_stream_screen.dart'; // <-- Ù‡Ø°Ø§ Ù…Ù‡Ù… Ù„Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+import '../categories/categories_screen.dart';
+import '../search/search_screen.dart';
+import 'typed_content_tab.dart';
+
+/// ===== KeepAliveWrapper =====
+class KeepAliveWrapper extends StatefulWidget {
+  final Widget child;
+  final bool keepAlive;
+  const KeepAliveWrapper({
+    super.key,
+    required this.child,
+    required this.keepAlive,
+  });
+
+  @override
+  State<KeepAliveWrapper> createState() => _KeepAliveWrapperState();
+}
+
+class _KeepAliveWrapperState extends State<KeepAliveWrapper>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+
+  @override
+  bool get wantKeepAlive => widget.keepAlive;
+}
+
+/// ===== Logo Header (Ø«Ø§Ø¨Øª ÙÙŠ Ø§Ù„Ø£Ø¹Ù„Ù‰) =====
+class _LogoHeader extends StatelessWidget {
+  const _LogoHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 72,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Image.asset(
+          'assets/images/logo.png',
+          height: 44,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+}
+
+/// =====================
+/// HomeSectionContainer
+/// ÙŠØ­ØªÙˆÙŠ Ø§Ù„Ù„ÙˆØ¬Ùˆ + Ø§Ù„ØªØ§Ø¨Ø§Øª + Ø§Ù„Ù…Ø­ØªÙˆÙ‰
+/// =====================
+class HomeSectionContainer extends StatefulWidget {
+  final Function(ProgramItem tappedItem) onStaticItemTap;
+  final int bottomNavIndex;
+
+  const HomeSectionContainer({
+    super.key,
+    required this.onStaticItemTap,
+    required this.bottomNavIndex,
+  });
+
+  @override
+  State<HomeSectionContainer> createState() => _HomeSectionContainerState();
+}
+
+class _HomeSectionContainerState extends State<HomeSectionContainer>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+
+  // â¬‡ï¸ ====== Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ù‡Ù†Ø§ ====== â¬‡ï¸
+  final List<Tab> _tabs = const <Tab>[
+    Tab(text: 'Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©'),
+    Tab(text: 'Ù…Ù‚Ø§Ø·Ø¹ Ù‚ØµÙŠØ±Ø©'), // <-- ØªÙ… Ø§Ù„ØªØºÙŠÙŠØ±
+    Tab(text: 'Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬'),
+    Tab(text: 'Ø§Ù„Ø£ÙÙ„Ø§Ù…'),
+  ];
+  // â¬†ï¸ ========================== â¬†ï¸
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: _tabs.length,
+      child: Column(
+        children: [
+          // --- Logo fixed on top ---
+          const _LogoHeader(),
+
+          // --- TabBar with gradient background ---
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Color(0xFF1C4E8E),
+                  Color(0xFF2576DF),
+                ],
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: TabBar(
+              controller: _tabController,
+              tabs: _tabs,
+              isScrollable: true,
+              indicatorColor: Colors.white,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+              unselectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.normal),
+            ),
+          ),
+
+          // --- TabBarView ---
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: <Widget>[
+                // 1) Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©
+                BlocProvider(
+                  create: (context) => HomeBloc(
+                    programRepository:
+                    RepositoryProvider.of<ProgramRepository>(context),
+                  )..add(FetchHomeContent()),
+                  child: HomeContentWidget(
+                    onStaticItemTap: widget.onStaticItemTap,
+                  ),
+                ),
+
+                // â¬‡ï¸ ====== Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ù‡Ù†Ø§ ====== â¬‡ï¸
+                // 2) Ù…Ù‚Ø§Ø·Ø¹ Ù‚ØµÙŠØ±Ø© (ÙØ§Ø±Øº Ø­Ø§Ù„ÙŠØ§Ù‹)
+                const KeepAliveWrapper(
+                  keepAlive: true, // Ù„Ù„Ø­ÙØ§Ø¸ Ø¹Ù„Ù‰ Ø§Ù„Ø­Ø§Ù„Ø© Ù…Ø³ØªÙ‚Ø¨Ù„Ø§Ù‹
+                  child: Center(
+                    child: Text(
+                      'Ø³ÙŠØªÙ… Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù…Ù‚Ø§Ø·Ø¹ Ø§Ù„Ù‚ØµÙŠØ±Ø© Ù‚Ø±ÙŠØ¨Ø§Ù‹',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                  ),
+                ),
+                // â¬†ï¸ ========================== â¬†ï¸
+
+                // 3) Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬
+                const KeepAliveWrapper(
+                  keepAlive: true,
+                  child: TypedContentTab(contentType: 'tv_show'),
+                ),
+
+                // 4) Ø§Ù„Ø£ÙÙ„Ø§Ù…
+                const KeepAliveWrapper(
+                  keepAlive: true,
+                  child: TypedContentTab(contentType: 'movie'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// =====================
+/// HomeContentWidget
+/// Ù…Ø­ØªÙˆÙ‰ ØªØ¨ "Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©"
+/// =====================
+class HomeContentWidget extends StatelessWidget {
+  final Function(ProgramItem tappedItem) onStaticItemTap;
+  const HomeContentWidget({super.key, required this.onStaticItemTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<HomeBloc, HomeState>(
+      builder: (context, state) {
+        if (state is HomeLoading || state is HomeInitial) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (state is HomeLoadFailure) {
+          return Center(
+            child: Text(
+              'Ø®Ø·Ø£: ${state.error}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+        if (state is HomeLoadSuccess) {
+          final itemCount = state.dynamicSliders.length + 1; // +1 Ù„Ù„ØµÙ Ø§Ù„Ø«Ø§Ø¨Øª
+          return CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.only(top: 10),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      if (index == 0) {
+                        // Ø§Ù„ØµÙ Ø§Ù„Ø«Ø§Ø¨Øª
+                        return HorizontalProgramRow(
+                          title: "Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©",
+                          programs: state.staticItems,
+                          rowHeight: 180.0,
+                          cardAspectRatio: 16 / 9,
+                          cardWidth: 150.0,
+                          onItemTap: onStaticItemTap,
+                        );
+                      }
+                      // Ø§Ù„ØµÙÙˆÙ Ø§Ù„Ø¯ÙŠÙ†Ø§Ù…ÙŠÙƒÙŠØ©
+                      final slider = state.dynamicSliders[index - 1];
+                      return HorizontalProgramRow(
+                        title: slider.title,
+                        programs: slider.programs,
+                        rowHeight: 280.0,
+                        cardAspectRatio: 2 / 3,
+                        cardWidth: 150.0,
+                      );
+                    },
+                    childCount: itemCount,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        return const Center(
+          child: Text('Ø­Ø§Ù„Ø© ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙØ©', style: TextStyle(color: Colors.white70)),
+        );
+      },
+    );
+  }
+}
+
+/// =====================
+/// HomeScreen
+/// Ø§Ù„Ø­Ø§ÙˆÙŠØ© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ© + Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+/// =====================
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ Ù„Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ: 1 (Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©)
+  int _selectedIndex = 1;
+
+  // Ø¹Ù†Ø§ØµØ± Ø§Ù„Ù€ IndexedStack (Ù†Ø­Ø¯Ù‘Ø«Ù‡Ø§ Ø¹Ù†Ø¯ ØªØºÙŠÙŠØ± Ø§Ù„Ø§Ù†Ø¯ÙƒØ³)
+  late List<Widget> _widgetOptions;
+
+  // Instances Ù„Ø­ÙØ¸ Ø§Ù„Ø­Ø§Ù„Ø© Ù…Ø¹ KeepAlive
+  final CategoriesScreen _categoriesScreen = const CategoriesScreen();
+  late HomeSectionContainer _homeSectionContainer;
+  // â¬‡ï¸ Ù„Ù… ÙŠØªÙ… Ø­Ø°Ù Ù‡Ø°Ø§ - Ø³ÙŠØ¹Ù…Ù„ Ù…Ø¹ Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ â¬‡ï¸
+  // (ØªÙ… Ø¥ØµÙ„Ø§Ø­ Ø§Ù„Ø®Ø·Ø£ Ø§Ù„Ù…Ù†Ø·Ù‚ÙŠ Ø§Ù„Ø³Ø§Ø¨Ù‚)
+  // final LiveStreamScreen _liveStreamScreen = LiveStreamScreen(
+  //   tabIndex: 2,
+  //   currentIndex: 1, // Ø³ÙŠØªÙ… ØªØ­Ø¯ÙŠØ« Ù‡Ø°Ø§ ÙÙŠ _buildWidgetOptions
+  //   isInTabView: false,
+  // );
+
+  @override
+  void initState() {
+    super.initState();
+    _homeSectionContainer = HomeSectionContainer(
+      onStaticItemTap: _handleStaticItemTap,
+      bottomNavIndex: _selectedIndex,
+    );
+    // Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø£ÙˆÙ„ Ù…Ø±Ø©
+    _buildWidgetOptions();
+  }
+
+  // â¬‡ï¸ ====== ØªØ¹Ø¯ÙŠÙ„ Ù…Ù†Ø·Ù‚ÙŠ Ù…Ù‡Ù… ====== â¬‡ï¸
+  // Ø¨Ù†Ø§Ø¡ Ø£Ùˆ Ø¥Ø¹Ø§Ø¯Ø© Ø¨Ù†Ø§Ø¡ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø´Ø§Ø´Ø§Øª Ø¨Ø§Ù„Ù€ index Ø§Ù„ØµØ­ÙŠØ­
+  void _buildWidgetOptions() {
+    _widgetOptions = <Widget>[
+      _categoriesScreen, // Index 0
+      _homeSectionContainer, // Index 1
+
+      // ÙŠØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø´Ø§Ø´Ø© Ø§Ù„Ø¨Ø« Ù‡Ù†Ø§ Ø¨Ø§Ù„Ù‚ÙŠÙ…Ø© Ø§Ù„ØµØ­ÙŠØ­Ø© Ù„Ù€ _selectedIndex
+      LiveStreamScreen(
+        tabIndex: 2, // Ù‡Ùˆ Ø§Ù„ØªØ§Ø¨ Ø±Ù‚Ù… 2 ÙÙŠ Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+        currentIndex: _selectedIndex, // ØªÙ…Ø±ÙŠØ± Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„Ù…Ø®ØªØ§Ø± Ø­Ø§Ù„ÙŠØ§Ù‹
+        isInTabView: false, // Ù„Ø£Ù†Ù‡ ÙÙŠ Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+      ), // Index 2
+
+      // Ù„Ø§ ØªÙˆØ¬Ø¯ Ø´Ø§Ø´Ø© Ø¨Ø­Ø« Ø¯Ø§Ø®Ù„ Ø§Ù„Ù€ IndexedStack
+    ];
+  }
+  // â¬†ï¸ =============================== â¬†ï¸
+
+
+  /// Ù†Ù‚Ø± Ø¹Ù†ØµØ± Ù…Ù† Ø§Ù„ØµÙ Ø§Ù„Ø«Ø§Ø¨Øª ÙÙŠ ØªØ¨ "Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©"
+  void _handleStaticItemTap(ProgramItem tappedItem) {
+    if (tappedItem.postType == "live_stream") {
+      _onItemTapped(2); // Ø§Ù„Ø§Ù†ØªÙ‚Ø§Ù„ Ù„ØªØ¨ Ø§Ù„Ø¨Ø« ÙÙŠ Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ØªÙ… Ø§Ù„Ù†Ù‚Ø± Ø¹Ù„Ù‰: ${tappedItem.title}')),
+      );
+    }
+  }
+
+  /// ØªØºÙŠÙŠØ± Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ
+  void _onItemTapped(int index) {
+    // Ù„Ùˆ Ø¶ØºØ· Ø¨Ø­Ø« (Ø£ÙŠÙ‚ÙˆÙ†Ø© Ø§Ù†Ø¯ÙƒØ³ 3) Ø§ÙØªØ­ SearchScreen ÙƒØµÙØ­Ø© Ø¬Ø¯ÙŠØ¯Ø©
+    if (index == 3) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const SearchScreen()),
+      );
+      return; // Ù„Ø§ ØªØºÙŠÙ‘Ø± selectedIndex
+    }
+
+    // Ø¨Ø§Ù‚ÙŠ Ø§Ù„ØªØ§Ø¨Ø§Øª (0,1,2) Ù†ØºÙŠÙ‘Ø± Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ ÙˆÙ†Ø­Ø¯Ù‘Ø« Ø§Ù„Ø¹Ù†Ø§ØµØ±
+    setState(() {
+      _selectedIndex = index;
+
+      // Ù„Ùˆ Ø±Ø§Ø¬Ø¹ Ù„Ù„Ø±Ø¦ÙŠØ³ÙŠØ©: Ù†Ø¹ÙŠØ¯ Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø­Ø§ÙˆÙŠØ© Ù„ØªÙ…Ø±ÙŠØ± Ø§Ù„Ù€ bottomNavIndex Ø§Ù„Ù…ÙØ­Ø¯Ù‘Ø«
+      if (index == 1) {
+        _homeSectionContainer = HomeSectionContainer(
+          onStaticItemTap: _handleStaticItemTap,
+          bottomNavIndex: _selectedIndex,
+        );
+      }
+
+      // â¬‡ï¸ Ù…Ù‡Ù… Ø¬Ø¯Ø§Ù‹ Ù„Ø¥Ø¹Ø§Ø¯Ø© Ø¨Ù†Ø§Ø¡ _liveStreamScreen Ø¨Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„ØµØ­ÙŠØ­ â¬‡ï¸
+      _buildWidgetOptions();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color activeColor = Colors.red[600] ?? Colors.red;
+    final Color inactiveColor = Colors.grey[400] ?? Colors.grey;
+
+    return Scaffold(
+      extendBodyBehindAppBar: false, // Ù…Ù‡Ù… Ù„Ø£Ù† Ø¹Ù†Ø¯Ù†Ø§ Ù‡ÙŠØ¯Ø± Ù„ÙˆØ¬Ùˆ Ù…Ø³ØªÙ‚Ù„
+      body: Stack(
+        children: [
+          // Ø®Ù„ÙÙŠØ©
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/bbg.jpg"), // <-- Ù…Ø­Ù„ÙŠØ©
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          // Ø§Ù„Ø´Ø§Ø´Ø© Ø§Ù„Ù…Ø®ØªØ§Ø±Ø©
+          IndexedStack(
+            index: _selectedIndex,
+            children: _widgetOptions,
+          ),
+        ],
+      ),
+
+      // Ø§Ù„Ø¨Ù†Ø± Ø§Ù„Ø³ÙÙ„ÙŠ (ConvexAppBar)
+      bottomNavigationBar: ConvexAppBar(
+        style: TabStyle.reactCircle,
+        backgroundColor: Colors.white,
+        color: inactiveColor,
+        activeColor: activeColor,
+        elevation: 5,
+        height: 60,
+        items: const [
+          TabItem(
+            icon: Icons.category_outlined,
+            activeIcon: Icons.category,
+            title: 'Ø§Ù„ØªØµÙ†ÙŠÙØ§Øª',
+          ),
+          TabItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home,
+            title: 'Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©',
+          ),
+          TabItem(
+            icon: Icons.live_tv_outlined,
+            activeIcon: Icons.live_tv,
+            title: 'Ø§Ù„Ø¨Ø« Ø§Ù„Ù…Ø¨Ø§Ø´Ø±',
+          ),
+          TabItem(
+            icon: Icons.search_outlined,
+            activeIcon: Icons.search,
+            title: 'Ø¨Ø­Ø«',
+          ),
+        ],
+        initialActiveIndex: _selectedIndex,
+        onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\home\home_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\home\typed_content_tab.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../data/models/program_slider.dart'; // <-- Ø§Ø³ØªÙŠØ±Ø§Ø¯ Slider model
+import '../../../data/repositories/program_repository.dart';
+import '../../widgets/horizontal_program_row.dart';
+
+// --- Bloc Events ---
+abstract class TypedContentEvent {}
+class FetchTypedContent extends TypedContentEvent {
+  final String type; // movie, tv_show, video
+  FetchTypedContent(this.type);
+}
+
+// --- Bloc States ---
+abstract class TypedContentState {}
+class TypedContentInitial extends TypedContentState {}
+class TypedContentLoading extends TypedContentState {}
+class TypedContentLoadSuccess extends TypedContentState {
+  final List<ProgramSlider> sliders;
+  TypedContentLoadSuccess(this.sliders);
+}
+class TypedContentLoadFailure extends TypedContentState {
+  final String error;
+  TypedContentLoadFailure(this.error);
+}
+
+// --- Bloc Logic ---
+class TypedContentBloc extends Bloc<TypedContentEvent, TypedContentState> {
+  final ProgramRepository _repository;
+
+  TypedContentBloc(this._repository) : super(TypedContentInitial()) {
+    on<FetchTypedContent>(_onFetchTypedContent);
+  }
+
+  Future<void> _onFetchTypedContent(FetchTypedContent event, Emitter<TypedContentState> emit) async {
+    emit(TypedContentLoading());
+    try {
+      // Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ø¯Ø§Ù„Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© ÙÙŠ Ø§Ù„Ø±ÙŠØ¨Ùˆ
+      final sliders = await _repository.getDashboardSlidersByType(event.type);
+      emit(TypedContentLoadSuccess(sliders));
+    } catch (e) {
+      emit(TypedContentLoadFailure(e.toString()));
+    }
+  }
+}
+
+
+// --- Ø§Ù„ÙˆÙŠØ¯Ø¬Øª ---
+class TypedContentTab extends StatelessWidget {
+  final String contentType; // 'movie', 'tv_show', 'video'
+
+  const TypedContentTab({super.key, required this.contentType});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => TypedContentBloc(RepositoryProvider.of<ProgramRepository>(context))
+        ..add(FetchTypedContent(contentType)), // Ø¨Ø¯Ø¡ Ø¬Ù„Ø¨ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+      child: BlocBuilder<TypedContentBloc, TypedContentState>(
+        builder: (context, state) {
+          if (state is TypedContentLoading || state is TypedContentInitial) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (state is TypedContentLoadFailure) {
+            return Center(child: Text('Ø®Ø·Ø£: ${state.error}', style: const TextStyle(color: Colors.white70)));
+          }
+          if (state is TypedContentLoadSuccess) {
+            if (state.sliders.isEmpty) {
+              return const Center(child: Text('Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ù…Ø­ØªÙˆÙ‰ Ù…ØªØ§Ø­ Ø­Ø§Ù„ÙŠØ§Ù‹.', style: TextStyle(color: Colors.white70)));
+            }
+
+            // Ø¹Ø±Ø¶ Ø§Ù„Ø³Ù„Ø§ÙŠØ¯Ø±Ø§Øª ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø±Ø£Ø³ÙŠØ©
+            return CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.only(top: kToolbarHeight + MediaQuery.of(context).padding.top + 10), // ØªØ±Ùƒ Ù…Ø³Ø§ÙØ© Ù„Ù„Ù€ AppBar ÙˆØ§Ù„Ù€ TabBar
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        final slider = state.sliders[index];
+                        // ÙƒÙ„ Ø§Ù„Ø³Ù„Ø§ÙŠØ¯Ø±Ø§Øª Ù‡Ù†Ø§ Ø·ÙˆÙ„ÙŠØ© (Ù„Ø§ ÙŠÙˆØ¬Ø¯ ØµÙ Ø«Ø§Ø¨Øª)
+                        return HorizontalProgramRow(
+                          title: slider.title,
+                          programs: slider.programs,
+                          rowHeight: 280.0,
+                          cardAspectRatio: 2 / 3,
+                          cardWidth: 150.0,
+                          // Ù„Ø§ Ù†Ø­ØªØ§Ø¬ callback Ø®Ø§Øµ Ù‡Ù†Ø§
+                        );
+                      },
+                      childCount: state.sliders.length,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          return const Center(child: Text('Ø­Ø§Ù„Ø© ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙØ©', style: TextStyle(color: Colors.white70)));
+        },
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\home\typed_content_tab.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\live_stream\live_stream_screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
+import '../../widgets/episode_list_item.dart';
+import '../../../data/models/episode_item.dart';
+
+class LiveStreamScreen extends StatefulWidget {
+  final int tabIndex; // Its index in BottomNav OR Top TabBar
+  final int currentIndex; // Currently selected BottomNav index
+  final bool isInTabView; // Is it inside HomeSectionContainer's TabBarView?
+
+  const LiveStreamScreen({
+    super.key,
+    required this.tabIndex,
+    required this.currentIndex,
+    this.isInTabView = false,
+  });
+
+  @override
+  State<LiveStreamScreen> createState() => _LiveStreamScreenState();
+}
+
+class _LiveStreamScreenState extends State<LiveStreamScreen> with AutomaticKeepAliveClientMixin {
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive
+
+  final String liveStreamUrl = "http://161.97.100.71/hls/stream.m3u8";
+
+  VideoPlayerController? _videoPlayerController;
+  ChewieController? _chewieController;
+  bool _isLoading = false; // Initialize as false
+  String? _error;
+  bool _isPlaying = false;
+  TabController? _topTabController;
+  bool _isTopTabListenerAdded = false;
+  // --- New flag to prevent multiple init calls ---
+  bool _isInitializing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    print("LiveStreamScreen (${widget.isInTabView ? 'TabView' : 'BottomNav'}): initState");
+    // Initial check deferred to didChangeDependencies
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    print("LiveStreamScreen (${widget.isInTabView ? 'TabView' : 'BottomNav'}): didChangeDependencies");
+    // Get Top TabController if needed
+    if (widget.isInTabView && _topTabController == null) {
+      _topTabController = DefaultTabController.maybeOf(context);
+      if (_topTabController != null && !_isTopTabListenerAdded) {
+        print("LiveStreamScreen (TabView): Adding TopTab Listener");
+        _topTabController!.addListener(_handleTopTabChange);
+        _isTopTabListenerAdded = true;
+        // Perform initial check *after* getting controller
+        // Use addPostFrameCallback to ensure build context is ready
+        WidgetsBinding.instance.addPostFrameCallback((_) => _checkPlaybackState());
+      } else if (_topTabController == null) {
+        print("LiveStreamScreen (TabView): Could not find Top TabController yet.");
+      }
+    } else if (!widget.isInTabView && !_isTopTabListenerAdded) { // Only check if not already handled
+      // If controlled by BottomNav, check state immediately (after build)
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPlaybackState());
+    }
+  }
+
+
+  @override
+  void didUpdateWidget(covariant LiveStreamScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print("LiveStreamScreen (${widget.isInTabView ? 'TabView' : 'BottomNav'}): didUpdateWidget");
+    // Handle BottomNav changes only if *not* in TabView
+    if (!widget.isInTabView && widget.currentIndex != oldWidget.currentIndex) {
+      print("LiveStreamScreen (BottomNav): Index changed to ${widget.currentIndex}, target is ${widget.tabIndex}");
+      _checkPlaybackState(); // Re-evaluate based on new index
+    }
+    // Re-check TabController in case it became available after an update
+    else if (widget.isInTabView && _topTabController == null) {
+      _topTabController = DefaultTabController.maybeOf(context);
+      if (_topTabController != null && !_isTopTabListenerAdded) {
+        print("LiveStreamScreen (TabView - Update): Adding TopTab Listener");
+        _topTabController!.addListener(_handleTopTabChange);
+        _isTopTabListenerAdded = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _checkPlaybackState());
+      }
+    }
+  }
+
+  // Check if playback should start or stop
+  void _checkPlaybackState(){
+    if (!mounted) return; // Ensure widget is still mounted
+    bool shouldPlay = false;
+    if (widget.isInTabView) {
+      // Play only if Top Tab Controller exists and its index is the live stream tab (index 1)
+      shouldPlay = (_topTabController != null && _topTabController!.index == 1);
+      print("LiveStreamScreen (TabView): Check State - TopTab Index: ${_topTabController?.index}, ShouldPlay: $shouldPlay");
+    } else {
+      // Play only if the BottomNav index matches this screen's index
+      shouldPlay = (widget.currentIndex == widget.tabIndex);
+      print("LiveStreamScreen (BottomNav): Check State - Current Index: ${widget.currentIndex}, TabIndex: ${widget.tabIndex}, ShouldPlay: $shouldPlay");
+    }
+
+    if(shouldPlay){
+      _ensurePlayerInitializedAndPlay();
+    } else {
+      _pausePlayback(); // Ensure player is paused if it shouldn't be playing
+    }
+  }
+
+
+  // Handle changes in the top TabBar
+  void _handleTopTabChange() {
+    if (!mounted || !widget.isInTabView || _topTabController == null) return;
+    print("LiveStreamScreen (TabView): TopTab Changed - New Index: ${_topTabController!.index}");
+    _checkPlaybackState(); // Re-evaluate play state based on new index
+  }
+
+  // --- Player Control Functions ---
+
+  Future<void> _ensurePlayerInitializedAndPlay() async {
+    // Prevent multiple concurrent initializations
+    if (_isInitializing || !mounted) return;
+
+    if (_chewieController != null && _isPlaying) return; // Already playing
+    if (_chewieController != null && !_isPlaying) {
+      _resumePlayback(); // Just resume if paused
+      return;
+    }
+    // Only initialize if controllers are null
+    if (_videoPlayerController == null && _chewieController == null) {
+      await _initializeAndPlayPlayer();
+    }
+  }
+
+  Future<void> _initializeAndPlayPlayer() async {
+    // Prevent re-entry and check if mounted
+    if (_isInitializing || !mounted) return;
+    _isInitializing = true; // Set flag
+
+    print("LiveStreamScreen: Initializing Player...");
+    // Update UI immediately to show loading
+    setStateIfMounted(() { _isLoading = true; _error = null; });
+
+    // Dispose previous resources *without* disposing controllers yet
+    await _disposePlayerResources(disposeControllers: false);
+
+    try {
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(liveStreamUrl));
+      await _videoPlayerController!.initialize();
+
+      // Check if mounted *after* await
+      if (!mounted) {
+        await _videoPlayerController?.dispose();
+        _isInitializing = false;
+        return;
+      }
+
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        autoPlay: true,
+        isLive: true,
+        looping: false,
+        placeholder: Container(color: Colors.black),
+        errorBuilder: (context, errorMessage) {
+          return Container(
+            color: Colors.black,
+            child: Center(
+              child: Text(
+                _error ?? "Ø­Ø¯Ø« Ø®Ø·Ø£.", // Show specific error
+                style: const TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        },
+      );
+
+      print("LiveStreamScreen: Player Initialized Successfully.");
+      // Update UI after successful initialization
+      setStateIfMounted(() {
+        _isLoading = false;
+        _isPlaying = true;
+        _error = null; // Clear any previous error
+      });
+
+    } catch (e) {
+      print("LiveStreamScreen: Error initializing player: $e");
+      // Update UI with error state
+      setStateIfMounted(() {
+        _isLoading = false;
+        _error = "Ù„Ø§ ÙŠÙ…ÙƒÙ† ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¨Ø« Ø§Ù„Ù…Ø¨Ø§Ø´Ø±.";
+        _isPlaying = false;
+      });
+    } finally {
+      // Reset flag regardless of success or failure
+      _isInitializing = false;
+    }
+  }
+
+  void _pausePlayback() {
+    if (_chewieController != null && _isPlaying) {
+      print("LiveStreamScreen: Pausing Player...");
+      _chewieController!.pause();
+      setStateIfMounted(() { _isPlaying = false; });
+    } else {
+      print("LiveStreamScreen: Cannot Pause (Controller: ${_chewieController != null}, Playing: $_isPlaying)");
+    }
+  }
+
+  void _resumePlayback() {
+    // Only resume if initialized, not loading, no error, and currently paused
+    if (_chewieController != null && !_isPlaying && !_isLoading && _error == null) {
+      print("LiveStreamScreen: Resuming Player...");
+      _chewieController!.play();
+      setStateIfMounted(() { _isPlaying = true; });
+    } else {
+      print("LiveStreamScreen: Cannot Resume (isLoading: $_isLoading, isPlaying: $_isPlaying, error: $_error)");
+      // Maybe try re-initializing if needed and conditions allow
+      if(!_isLoading && _error == null){
+        _checkPlaybackState(); // Re-check if it *should* be playing
+      }
+    }
+  }
+
+  Future<void> _disposePlayerResources({bool disposeControllers = true}) async {
+    print("LiveStreamScreen: Disposing Player Resources (Dispose Controllers: $disposeControllers)");
+    // Pause first
+    _chewieController?.pause();
+    // Then dispose if requested
+    if (disposeControllers) {
+      if (_chewieController != null) {
+        _chewieController!.dispose();
+        _chewieController = null;
+      }
+      if (_videoPlayerController != null) {
+        await _videoPlayerController!.dispose();
+        _videoPlayerController = null;
+      }
+    }
+    // Always update playing state
+    setStateIfMounted(() { _isPlaying = false; });
+  }
+
+  // Helper to safely call setState
+  void setStateIfMounted(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    }
+  }
+
+
+  @override
+  void dispose() {
+    print("LiveStreamScreen (${widget.isInTabView ? 'TabView' : 'BottomNav'}): dispose");
+    _topTabController?.removeListener(_handleTopTabChange);
+    _disposePlayerResources(disposeControllers: true); // Full disposal
+    super.dispose();
+  }
+
+  // --- Build Method ---
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Needed for AutomaticKeepAliveClientMixin
+    print("LiveStreamScreen (${widget.isInTabView ? 'TabView' : 'BottomNav'}): build - isLoading: $_isLoading, isPlaying: $_isPlaying, error: $_error, chewie: ${_chewieController != null}");
+
+    if (widget.isInTabView) {
+      return _buildTabViewLayout();
+    } else {
+      return _buildFullScreenLayout();
+    }
+  }
+
+  // --- Layout Builders (Remain the same) ---
+  Widget _buildTabViewLayout() {
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              color: Colors.black,
+              child: _buildPlayerWidget(), // Use the unified player builder
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: _buildInfoPanelContent(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildFullScreenLayout() { /* ... Same as before ... */
+    final scaffoldBackgroundColor = Colors.grey[100];
+    return Scaffold(
+      backgroundColor: scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          _buildPlayerHeader(),
+          DraggableScrollableSheet(
+            initialChildSize: 0.60, minChildSize: 0.60, maxChildSize: 0.9,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                  boxShadow: [ BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)), ],
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+                  child: ListView(
+                    controller: scrollController, padding: const EdgeInsets.all(20.0),
+                    children: [ _buildDragHandle(), _buildInfoPanelContent(context), ],
+                  ),
+                ),
+              );
+            },
+          ),
+          _buildBackButton(),
+        ],
+      ),
+    );
+  }
+
+  // --- Widget Builders (Remain the same) ---
+  Widget _buildPlayerHeader() { /* ... Same as before ... */
+    final screenHeight = MediaQuery.of(context).size.height;
+    return Container(
+      height: screenHeight * 0.40, width: double.infinity, color: Colors.black,
+      child: _buildPlayerWidget(),
+    );
+  }
+
+  // --- UPDATED Player Widget Builder ---
+  Widget _buildPlayerWidget() {
+    // Show Loading explicitly if _isLoading is true
+    if (_isLoading) {
+      print("Building Player Widget: Loading State");
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    // Show Error if _error is not null
+    if (_error != null) {
+      print("Building Player Widget: Error State - $_error");
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+    // Show Player ONLY if ChewieController is not null AND initialization is complete
+    if (_chewieController != null) {
+      print("Building Player Widget: Success State - Chewie Controller Ready");
+      return Chewie(controller: _chewieController!);
+    }
+    // Fallback message if none of the above conditions are met (should ideally not happen)
+    print("Building Player Widget: Fallback State - Player not available");
+    return const Center(child: Text("Player not available.", style: TextStyle(color: Colors.white70)));
+  }
+
+  Widget _buildBackButton() { /* ... Same as before ... */
+    return Positioned( top: 40, left: 16, child: SafeArea( child: CircleAvatar( backgroundColor: Colors.black.withOpacity(0.5), child: IconButton( icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.of(context).pop(), ), ), ), );
+  }
+  Widget _buildDragHandle() { /* ... Same as before ... */
+    return Center( child: Container( width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16.0), decoration: BoxDecoration( color: Colors.grey[300], borderRadius: BorderRadius.circular(2), ), ), );
+  }
+  Widget _buildInfoPanelContent(BuildContext context) { /* ... Same as before ... */
+    final dummyEpisode = EpisodeItem(id: 1, title: "Ù…Ø«Ø§Ù„ Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø­Ù„Ù‚Ø©", image: "https://via.placeholder.com/160x90", runTime: "45:00");
+    return Column( crossAxisAlignment: CrossAxisAlignment.start, children: [ Row( mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [ Text( "Ø§Ù„Ø¨Ø« Ø§Ù„Ù…Ø¨Ø§Ø´Ø±", style: Theme.of(context).textTheme.headlineMedium?.copyWith( fontWeight: FontWeight.bold, color: Colors.black87, ), ), IconButton( icon: Icon(Icons.favorite_border, color: Colors.red[400], size: 28), onPressed: () {}, ), ], ), const SizedBox(height: 8), _buildInfoChip(context, Icons.tv_rounded, "Ù‚Ù†Ø§Ø© Ø¯Ø¹ÙˆØ© Ø§Ù„ÙØ¶Ø§Ø¦ÙŠØ©"), _buildInfoChip(context, Icons.access_time_rounded, "Ù…Ø³ØªÙ…Ø± 24/7"), const Divider(height: 32), Text( "Ù‚Ø¯ ÙŠØ¹Ø¬Ø¨Ùƒ Ø£ÙŠØ¶Ø§Ù‹:", style: Theme.of(context).textTheme.titleLarge?.copyWith( fontWeight: FontWeight.bold, color: Colors.black87, ), ), const SizedBox(height: 8), EpisodeListItem(episode: dummyEpisode, onTap: () {}), EpisodeListItem(episode: dummyEpisode.copyWith(title: "Ø¹Ù†ÙˆØ§Ù† Ø­Ù„Ù‚Ø© Ø£Ø®Ø±Ù‰ Ù„Ù„Ù…Ø«Ø§Ù„"), onTap: () {}), const SizedBox(height: 20), ], );
+  }
+  Widget _buildInfoChip(BuildContext context, IconData icon, String text) { /* ... Same as before ... */
+    return Padding( padding: const EdgeInsets.symmetric(vertical: 4.0), child: Row( children: [ Icon(icon, color: Colors.grey[600], size: 18), const SizedBox(width: 8), Text( text, style: Theme.of(context).textTheme.bodyMedium?.copyWith( color: Colors.grey[800], ), ), ], ), );
+  }
+}
+
+// --- (EpisodeItemCopy extension remains the same) ---
+extension EpisodeItemCopy on EpisodeItem { /* ... Same as before ... */
+  EpisodeItem copyWith({ int? id, String? title, String? image, String? postType, String? runTime, String? releaseDate, }) { return EpisodeItem( id: id ?? this.id, title: title ?? this.title, image: image ?? this.image, postType: postType ?? this.postType, runTime: runTime ?? this.runTime, releaseDate: releaseDate ?? this.releaseDate, ); } }
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\live_stream\live_stream_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\program_detail\program_detail_screen.dart ==== */
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart'; // 1. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø£Ø¯Ø§Ø© Ø§Ù„ÙŠÙˆØªÙŠÙˆØ¨
+import '../../../data/models/episode_item.dart';
+import '../../../data/models/season.dart';
+import '../../../data/models/tv_show_details.dart';
+import '../../../data/repositories/program_repository.dart';
+import '../../widgets/expandable_description.dart'; // 2. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„ÙˆØµÙ (Ø§Ù„Ø¯Ø§Ø¹Ù… Ù„Ù€ HTML)
+import '../../widgets/episode_list_item.dart'; // 3. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø¹Ù†ØµØ± Ø§Ù„Ø­Ù„Ù‚Ø©
+import '../video_player/video_player_screen.dart'; // 4. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø´Ø§Ø´Ø© Ø§Ù„Ù…Ø´ØºÙ„ Ø§Ù„Ø¹Ø§Ø¯ÙŠ
+import '../video_player/youtube_player_screen.dart'; // 5. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø´Ø§Ø´Ø© Ù…Ø´ØºÙ„ Ø§Ù„ÙŠÙˆØªÙŠÙˆØ¨
+
+class ProgramDetailScreen extends StatefulWidget {
+  final int programId;
+
+  const ProgramDetailScreen({super.key, required this.programId});
+
+  @override
+  State<ProgramDetailScreen> createState() => _ProgramDetailScreenState();
+}
+
+class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
+  // Repository Ù„Ø¬Ù„Ø¨ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+  final ProgramRepository _repository = ProgramRepository();
+
+  // Ù…ØªØºÙŠØ±Ø§Øª Ø§Ù„Ø­Ø§Ù„Ø© (State)
+  TvShowDetails? _details;
+  List<EpisodeItem> _episodes = [];
+  Season? _selectedSeason;
+  bool _isLoadingDetails = true;
+  bool _isLoadingEpisodes = false;
+  String? _error;
+
+  // Ø­Ø§Ù„Ø© Ù„Ø²Ø± Ø§Ù„ØªØ´ØºÙŠÙ„ Ø§Ù„ÙƒØ¨ÙŠØ± (Ù„Ø¥Ø¸Ù‡Ø§Ø± Ø§Ù„ØªØ­Ù…ÙŠÙ„)
+  bool _isStartingPlayback = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProgramDetails();
+  }
+
+  // 1. Ø¬Ù„Ø¨ ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬ Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+  Future<void> _fetchProgramDetails() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingDetails = true;
+      _error = null;
+    });
+    try {
+      final details = await _repository.getProgramDetails(widget.programId);
+      if (!mounted) return;
+      setState(() {
+        _details = details;
+        _isLoadingDetails = false;
+      });
+
+      // Ø¨Ø¹Ø¯ Ø¬Ù„Ø¨ Ø§Ù„ØªÙØ§ØµÙŠÙ„ØŒ Ø§Ø¬Ù„Ø¨ Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù…ÙˆØ³Ù… Ø§Ù„Ø£ÙˆÙ„ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
+      if (details.seasons.isNotEmpty) {
+        _selectSeason(details.seasons.first);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = "ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬: ${e.toString()}";
+        _isLoadingDetails = false;
+      });
+    }
+  }
+
+  // 2. Ø¯Ø§Ù„Ø© Ù„Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ù…ÙˆØ³Ù… ÙˆØ¬Ù„Ø¨ Ø­Ù„Ù‚Ø§ØªÙ‡
+  Future<void> _selectSeason(Season season) async {
+    if (!mounted) return;
+    setState(() {
+      _selectedSeason = season;
+      _isLoadingEpisodes = true; // Ø¥Ø¸Ù‡Ø§Ø± Ù…Ø¤Ø´Ø± ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø§Øª
+      _episodes = []; // Ù…Ø³Ø­ Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù‚Ø¯ÙŠÙ…Ø©
+    });
+
+    try {
+      final episodes = await _repository.getSeasonEpisodes(widget.programId, season.id);
+      if (!mounted) return;
+      setState(() {
+        // Ø¹ÙƒØ³ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© ÙƒÙ…Ø§ ÙÙŠ ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„ØªÙ„ÙØ²ÙŠÙˆÙ†
+        _episodes = episodes.reversed.toList();
+        _isLoadingEpisodes = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = "ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø§Øª: ${e.toString()}";
+        _isLoadingEpisodes = false;
+      });
+    }
+  }
+
+  // 3. Ø¯Ø§Ù„Ø© ØªØ´ØºÙŠÙ„ "Ø°ÙƒÙŠØ©" (ØªÙØ­Øµ Ø§Ù„Ø±Ø§Ø¨Ø· Ø£ÙˆÙ„Ø§Ù‹)
+  Future<void> _playEpisode(EpisodeItem episode, int index) async {
+    if (_isLoadingDetails) return;
+
+    setState(() {
+      _isStartingPlayback = true;
+    });
+
+    try {
+      // 1. Ø¬Ù„Ø¨ Ø§Ù„Ø±Ø§Ø¨Ø· Ù…Ù† Ø§Ù„Ù€ API
+      final episodeDetails = await _repository.getEpisodeDetails(episode.id);
+      final videoUrl = episodeDetails.urlLink;
+
+      if (videoUrl == null || videoUrl.isEmpty) {
+        throw Exception("Ø±Ø§Ø¨Ø· Ø§Ù„ÙÙŠØ¯ÙŠÙˆ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
+      }
+
+      if (!mounted) return;
+
+      // --- 2. Ø§Ù„ÙØ­Øµ Ø§Ù„Ø°ÙƒÙŠ (Ù…Ø«Ù„ ÙƒÙˆØ¯ Ø§Ù„Ø£Ù†Ø¯Ø±ÙˆÙŠØ¯) ---
+      if (videoUrl.contains("youtube.com") || videoUrl.contains("youtu.be")) {
+        // --- Ø¥Ù†Ù‡ Ø±Ø§Ø¨Ø· ÙŠÙˆØªÙŠÙˆØ¨ ---
+        final videoId = YoutubePlayer.convertUrlToId(videoUrl);
+
+        if (videoId == null || videoId.isEmpty) {
+          throw Exception("Ø±Ø§Ø¨Ø· Ø§Ù„ÙŠÙˆØªÙŠÙˆØ¨ ØºÙŠØ± ØµØ§Ù„Ø­.");
+        }
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => YouTubePlayerScreen(
+              episodes: _episodes,
+              startIndex: index,
+              repository: _repository,
+              initialVideoId: videoId,
+            ),
+          ),
+        );
+
+      } else {
+        // --- Ø¥Ù†Ù‡ Ø±Ø§Ø¨Ø· Ù…Ø¨Ø§Ø´Ø± (MP4/M3U8) ---
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VideoPlayerScreen(
+              episodes: _episodes,
+              startIndex: index,
+              repository: _repository,
+            ),
+          ),
+        );
+      }
+      // ----------------------------------------
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Ø®Ø·Ø£ ÙÙŠ ØªØ´ØºÙŠÙ„ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ: ${e.toString()}")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStartingPlayback = false;
+        });
+      }
+    }
+  }
+
+  // 4. Ø¯Ø§Ù„Ø© Ø²Ø± Ø§Ù„ØªØ´ØºÙŠÙ„ Ø§Ù„ÙƒØ¨ÙŠØ± (ØªØ´ØºÙ„ Ø£ÙˆÙ„ Ø­Ù„Ù‚Ø©)
+  Future<void> _onPlayTapped() async {
+    if (_isLoadingEpisodes || _episodes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ù„Ø§ ØªÙˆØ¬Ø¯ Ø­Ù„Ù‚Ø§Øª Ù…ØªØ§Ø­Ø© Ù„Ù„ØªØ´ØºÙŠÙ„.")),
+      );
+      return;
+    }
+    // ØªØ´ØºÙŠÙ„ Ø£ÙˆÙ„ Ø­Ù„Ù‚Ø© (Ø§Ù†Ø¯ÙƒØ³ 0)
+    _playEpisode(_episodes.first, 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white, // Ø§Ù„Ø®Ù„ÙÙŠØ© Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠØ© Ø¨ÙŠØ¶Ø§Ø¡
+      body: _buildBody(),
+    );
+  }
+
+  // Ø¯Ø§Ù„Ø© Ø¨Ù†Ø§Ø¡ Ø§Ù„ÙˆØ§Ø¬Ù‡Ø© Ø¨Ù†Ø§Ø¡Ù‹ Ø¹Ù„Ù‰ Ø§Ù„Ø­Ø§Ù„Ø©
+  Widget _buildBody() {
+    if (_isLoadingDetails) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _details == null) {
+      // Ø¥Ø¸Ù‡Ø§Ø± Ø±Ø³Ø§Ù„Ø© Ø§Ù„Ø®Ø·Ø£ Ù…Ø¹ Ø²Ø± Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©
+      return _buildErrorWidget(_error!);
+    }
+    if (_details == null) {
+      return const Center(child: Text("Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬."));
+    }
+
+    // --- Ø§Ù„ØªØµÙ…ÙŠÙ… Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ (Stack) ---
+    return Stack(
+      children: [
+        // --- 1. ØµÙˆØ±Ø© Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬ Ù…Ø¹ Ø²Ø± Ø§Ù„ØªØ´ØºÙŠÙ„ ÙÙŠ Ø§Ù„Ø®Ù„ÙÙŠØ© ---
+        _buildHeaderImageWithPlayButton(_details!),
+
+        // --- 2. Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„Ø³Ø­Ø¨ ---
+        DraggableScrollableSheet(
+          initialChildSize: 0.45, // Ø§Ø¨Ø¯Ø£ Ù…Ù† 65% Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø©
+          minChildSize: 0.45,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)),
+                ],
+              ),
+              // --- 3. Ù…Ø­ØªÙˆÙ‰ Ø§Ù„Ù„ÙˆØ­Ø© (Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª ÙˆØ§Ù„Ø­Ù„Ù‚Ø§Øª) ---
+              child: _buildInfoPanel(scrollController, _details!),
+            );
+          },
+        ),
+
+        // --- 4. Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹ ---
+        Positioned(
+          top: 40,
+          left: 16,
+          child: SafeArea(
+            child: CircleAvatar(
+              backgroundColor: Colors.black.withOpacity(0.5),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø®Ø·Ø£
+  Widget _buildErrorWidget(String error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(error, textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
+          ),
+          ElevatedButton(
+            onPressed: _fetchProgramDetails, // Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©
+            child: const Text('Retry'),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª ØµÙˆØ±Ø© Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬ ÙÙŠ Ø§Ù„Ø£Ø¹Ù„Ù‰ (Ù…Ø¹ Ø²Ø± Ø§Ù„ØªØ´ØºÙŠÙ„)
+  Widget _buildHeaderImageWithPlayButton(TvShowDetails details) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    return SizedBox(
+      height: screenHeight * 0.6, // 45% Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø©
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Ø§Ù„ØµÙˆØ±Ø© (ÙÙŠ Ø§Ù„Ø®Ù„ÙÙŠØ©)
+          CachedNetworkImage(
+            imageUrl: details.image,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(color: Colors.black12),
+            errorWidget: (context, url, error) => Container(
+              color: Colors.black12,
+              child: const Icon(Icons.error, color: Colors.black26),
+            ),
+          ),
+          // 2. ÙÙ„ØªØ± ØºØ§Ù…Ù‚ (Ù„ØªÙˆØ¶ÙŠØ­ Ø§Ù„Ø²Ø±)
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black.withOpacity(0.5), Colors.transparent],
+                begin: Alignment.bottomCenter,
+                end: Alignment.center,
+              ),
+            ),
+          ),
+          // 3. Ø²Ø± Ø§Ù„ØªØ´ØºÙŠÙ„ (ÙÙŠ Ø§Ù„Ù…Ù†ØªØµÙ)
+          Center(
+            child: _isStartingPlayback
+            // Ø¥Ø°Ø§ ÙƒØ§Ù† ÙŠØ­Ù…Ù‘Ù„: Ø£Ø¸Ù‡Ø± Ù…Ø¤Ø´Ø± ØªØ­Ù…ÙŠÙ„
+                ? const SizedBox(
+              width: 60,
+              height: 60,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 3,
+              ),
+            )
+            // Ø¥Ø°Ø§ ÙƒØ§Ù† Ø¬Ø§Ù‡Ø²Ø§Ù‹: Ø£Ø¸Ù‡Ø± Ø§Ù„Ø²Ø±
+                : InkWell(
+              onTap: _onPlayTapped,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.play_arrow,
+                  color: Colors.red[600],
+                  size: 45,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª ÙˆØ§Ù„Ø­Ù„Ù‚Ø§Øª
+  Widget _buildInfoPanel(ScrollController scrollController, TvShowDetails details) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+      child: ListView( // Ø§Ø³ØªØ®Ø¯Ø§Ù… ListView Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† SingleChildScrollView
+        controller: scrollController,
+        padding: const EdgeInsets.all(20.0),
+        children: [
+          // Ù…Ù‚Ø¨Ø¶ Ø§Ù„Ø³Ø­Ø¨
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Ø§Ù„Ø¹Ù†ÙˆØ§Ù† ÙˆØ²Ø± Ø§Ù„Ø¥Ø¹Ø¬Ø§Ø¨
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  details.title,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.favorite_border, color: Colors.red[400], size: 28),
+                onPressed: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø¥Ø¶Ø§ÙÙŠØ© (Ø§Ù„Ø£Ù†ÙˆØ§Ø¹ + Ø¹Ø¯Ø¯ Ø§Ù„Ù…ÙˆØ§Ø³Ù…)
+          Text(
+            "${details.genre.join(' â€¢ ')}  â€¢  ${details.seasonsCount} Ù…ÙˆØ§Ø³Ù…",
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[800],
+            ),
+          ),
+
+          const Divider(height: 5),
+
+          // Ø§Ù„ÙˆØµÙ (Ø§Ù„Ù‚Ø§Ø¨Ù„ Ù„Ù„ØªÙˆØ³ÙŠØ¹)
+          const SizedBox(height: 5),
+          ExpandableDescription(text: details.description), // <-- Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„ÙˆÙŠØ¯Ø¬Øª Ø§Ù„Ø¯Ø§Ø¹Ù… Ù„Ù€ HTML
+
+          const Divider(height: 5),
+
+          // Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ù…ÙˆØ³Ù…
+
+          const SizedBox(height: 0),
+
+          // Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ù„Ù‚Ø§Øª
+          _buildEpisodeList(),
+        ],
+      ),
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ù…ÙˆØ³Ù…
+  Widget _buildSeasonSelector(List<Season> seasons) {
+    if (seasons.isEmpty) {
+      return const Text("Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…ÙˆØ§Ø³Ù… Ù…ØªØ§Ø­Ø©.");
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Ø§Ù„Ù…ÙˆØ³Ù…:",
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Ø§Ø³ØªØ®Ø¯Ø§Ù… Dropdown Ø£Ù†ÙŠÙ‚
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<Season>(
+              isExpanded: true,
+              value: _selectedSeason,
+              icon: const Icon(Icons.keyboard_arrow_down),
+              items: seasons.map((season) {
+                return DropdownMenuItem<Season>(
+                  value: season,
+                  child: Text(season.name),
+                );
+              }).toList(),
+              onChanged: (Season? newSeason) {
+                if (newSeason != null) {
+                  _selectSeason(newSeason);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ù„Ù‚Ø§Øª
+  Widget _buildEpisodeList() {
+    if (_isLoadingEpisodes) {
+      // Ø¥Ø¸Ù‡Ø§Ø± Ù…Ø¤Ø´Ø± ØªØ­Ù…ÙŠÙ„ ÙÙŠ Ø§Ù„Ù…Ù†ØªØµÙ
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null && _episodes.isEmpty) {
+      return Center(child: Text(_error!));
+    }
+
+    if (_episodes.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 20.0),
+          child: Text("Ù„Ø§ ØªÙˆØ¬Ø¯ Ø­Ù„Ù‚Ø§Øª ÙÙŠ Ù‡Ø°Ø§ Ø§Ù„Ù…ÙˆØ³Ù…."),
+        ),
+      );
+    }
+
+    // Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø©
+    return ListView.builder(
+      // --- Ù‡Ø§Ù… Ø¬Ø¯Ø§Ù‹ ---
+      // Ù„Ù…Ù†Ø¹ ØªØ¹Ø§Ø±Ø¶ Ø§Ù„ØªÙ…Ø±ÙŠØ± (scrolling)
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,               // â† Ù…Ù‡Ù…
+// ----------------
+      itemCount: _episodes.length,
+      itemBuilder: (context, index) {
+        final episode = _episodes[index];
+        return EpisodeListItem(
+          episode: episode,
+          onTap: () {
+            // --- Ø§Ù„Ø±Ø¨Ø· Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ ---
+            // Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø­Ù„Ù‚Ø© ÙˆØ§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„Ø®Ø§Øµ Ø¨Ù‡Ø§
+            _playEpisode(episode, index);
+          },
+        );
+      },
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\program_detail\program_detail_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\search\search_screen.dart ==== */
+
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../data/repositories/program_repository.dart';
+import '../../bloc/search/search_bloc.dart';
+import '../../bloc/search/search_event.dart';
+import '../../bloc/search/search_state.dart';
+import '../../widgets/program_card.dart';
+import '../program_detail/program_detail_screen.dart';
+
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late final SearchBloc _searchBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchBloc = SearchBloc(RepositoryProvider.of<ProgramRepository>(context));
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    // Ø¨Ù…Ø§ Ø£Ù†Ù†Ø§ Ø£Ù†Ø´Ø£Ù†Ø§ Ø§Ù„Ø¨Ù„ÙˆÙƒ Ù‡Ù†Ø§ØŒ Ù†ØºÙ„Ù‚Ù‡ Ù‡Ù†Ø§
+    _searchBloc.close();
+    super.dispose();
+  }
+
+  // Ù…Ø³ØªÙ…Ø¹ Ù„Ù„Ù€ pagination
+  void _onScroll() {
+    if (_isBottom) {
+      _searchBloc.add(LoadMoreSearchResults());
+    }
+  }
+
+  bool get _isBottom {
+    if (!_scrollController.hasClients) return false;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    return currentScroll >= (maxScroll * 0.9);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            cursorColor: Colors.white54,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, color: Colors.white70),
+              hintText: 'Ø§Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬ ÙˆØ§Ù„Ø£ÙÙ„Ø§Ù…...',
+              hintStyle: const TextStyle(color: Colors.white70),
+              border: InputBorder.none,
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear, color: Colors.white70),
+                onPressed: () {
+                  _searchController.clear();
+                  _searchBloc.add(ClearSearch());
+                },
+              ),
+            ),
+            onChanged: (query) {
+              _searchBloc.add(SearchQueryChanged(query));
+            },
+          ),
+        ),
+        backgroundColor: Colors.grey[900],
+      ),
+      backgroundColor: Colors.grey[900],
+      body: BlocProvider.value(
+        value: _searchBloc,
+        child: BlocBuilder<SearchBloc, SearchState>(
+          builder: (context, state) {
+            if (state is SearchInitial) {
+              return const Center(
+                child: Text('Ø§Ø¨Ø¯Ø£ Ø§Ù„ÙƒØªØ§Ø¨Ø© Ù„Ù„Ø¨Ø­Ø«', style: TextStyle(color: Colors.white54)),
+              );
+            }
+
+            // âœ… Ø§Ù„Ù„ÙˆØ¯Ø± Ø§Ù„Ø¹Ø§Ù… ÙŠØ¸Ù‡Ø± ÙÙ‚Ø· Ø¹Ù†Ø¯Ù…Ø§ Ø§Ù„Ø­Ø§Ù„Ø© SearchLoading
+            if (state is SearchLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (state is SearchFailure) {
+              return Center(
+                child: Text('Ø­Ø¯Ø« Ø®Ø·Ø£: ${state.error}',
+                    style: const TextStyle(color: Colors.redAccent)),
+              );
+            }
+
+            if (state is SearchSuccess) {
+              if (state.programs.isEmpty) {
+                return const Center(
+                  child: Text('Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬', style: TextStyle(color: Colors.white54)),
+                );
+              }
+
+              return GridView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(12.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 3 / 4,
+                  crossAxisSpacing: 12.0,
+                  mainAxisSpacing: 12.0,
+                ),
+                // Ù†Ø¶ÙŠÙ Ø¹Ù†ØµØ± Ù„ÙˆØ¯Ø± Ø¥Ø¶Ø§ÙÙŠ Ø¥Ø°Ø§ Ù„Ù… Ù†ØµÙ„ Ù„Ù„Ù†Ù‡Ø§ÙŠØ©
+                itemCount: state.hasReachedMax
+                    ? state.programs.length
+                    : state.programs.length + 1,
+                itemBuilder: (context, index) {
+                  // Ø¹Ù†ØµØ± Ø§Ù„Ù„ÙˆØ¯Ø± ÙÙŠ Ù†Ù‡Ø§ÙŠØ© Ø§Ù„Ø´Ø¨ÙƒØ© Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…ØªÙˆØ§ØµÙ„
+                  if (index >= state.programs.length) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final program = state.programs[index];
+                  return ProgramCard(
+                    program: program,
+                    aspectRatio: 3 / 4,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ProgramDetailScreen(programId: program.id),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+
+            // Ø­Ø§Ù„Ø© Ø§Ø­ØªÙŠØ§Ø·ÙŠØ©
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\search\search_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\Splash_Screen\Splash_Screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  late VideoPlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.asset('assets/videos/Comp1.mp4')
+      ..initialize().then((_) {
+        _controller.play();
+        setState(() {});
+      });
+
+    _controller.addListener(() {
+      if (_controller.value.position >= _controller.value.duration) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF9FA), // â† Ø§Ù„Ù„ÙˆÙ† Ø§Ù„Ù…Ø·Ù„ÙˆØ¨
+      body: Center(
+        child: _controller.value.isInitialized
+            ? AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              )
+            : const SizedBox(),
+      ),
+    );
+  }
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\Splash_Screen\Splash_Screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\video_player\video_player_screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
+import '../../../data/models/episode_item.dart'; // 1. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù…ÙˆØ¯Ù„ Ø§Ù„Ø­Ù„Ù‚Ø©
+import '../../../data/repositories/program_repository.dart'; // 2. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ø±ÙŠØ¨Ùˆ
+import '../../../data/playback_position_manager.dart'; // 3. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù…Ø¯ÙŠØ± Ø§Ù„Ø­ÙØ¸
+import '../../widgets/episode_list_item.dart'; // 4. Ø§Ø³ØªÙŠØ±Ø§Ø¯ ÙˆÙŠØ¯Ø¬Øª Ø¹Ù†ØµØ± Ø§Ù„Ø­Ù„Ù‚Ø©
+
+class VideoPlayerScreen extends StatefulWidget {
+  final List<EpisodeItem> episodes;
+  final int startIndex;
+  final ProgramRepository repository;
+
+  const VideoPlayerScreen({
+    super.key,
+    required this.episodes,
+    required this.startIndex,
+    required this.repository,
+  });
+
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  VideoPlayerController? _videoPlayerController;
+  ChewieController? _chewieController;
+
+  late int _currentIndex;
+  EpisodeItem? _currentEpisode;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.startIndex;
+    _initializeEpisode(_currentIndex);
+  }
+
+  // Ø¯Ø§Ù„Ø© ØªÙ‡ÙŠØ¦Ø© Ø§Ù„Ø­Ù„Ù‚Ø© (Ø§Ù„Ø£Ù‡Ù…)
+  Future<void> _initializeEpisode(int index) async {
+    if (!mounted) return;
+
+    // Ù…Ù†Ø¹ Ø§Ù„Ù†Ù‚Ø± Ø§Ù„Ù…ØªÙƒØ±Ø± Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„ØªØ­Ù…ÙŠÙ„
+    if (_isLoading) return;
+
+    // Ø¥Ø¸Ù‡Ø§Ø± Ø§Ù„ØªØ­Ù…ÙŠÙ„
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _currentIndex = index; // ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø§Ù†Ø¯ÙƒØ³
+      _currentEpisode = widget.episodes[index]; // ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©
+    });
+
+    // Ø¥ÙŠÙ‚Ø§Ù Ø§Ù„Ù…Ø´ØºÙ„ Ø§Ù„Ù‚Ø¯ÙŠÙ… Ø¥Ø°Ø§ ÙƒØ§Ù† Ù…ÙˆØ¬ÙˆØ¯Ø§Ù‹
+    if (_chewieController != null) {
+      _chewieController!.dispose(); // (Ø¨Ø¯ÙˆÙ† await)
+      _chewieController = null;
+    }
+    if (_videoPlayerController != null) {
+      _videoPlayerController!.removeListener(_onVideoEndListener);
+      await _videoPlayerController!.dispose();
+      _videoPlayerController = null;
+    }
+
+    try {
+      // Ø£. Ø¬Ù„Ø¨ Ø±Ø§Ø¨Ø· Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ù…Ù† Ø§Ù„Ù€ API
+      final episodeDetails = await widget.repository.getEpisodeDetails(_currentEpisode!.id);
+      final videoUrl = episodeDetails.urlLink;
+
+      if (videoUrl == null || videoUrl.isEmpty) {
+        throw Exception("Ø±Ø§Ø¨Ø· Ø§Ù„ÙÙŠØ¯ÙŠÙˆ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
+      }
+
+      // Ø¨. Ø¬Ù„Ø¨ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸
+      final startAt = await PlaybackPositionManager.getPosition(_currentEpisode!.id);
+
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await _videoPlayerController!.initialize();
+      if (!mounted) return;
+
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        autoPlay: true,
+        startAt: startAt, // Ø¨Ø¯Ø¡ Ø§Ù„ØªØ´ØºÙŠÙ„ Ù…Ù† Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸
+        placeholder: Container(color: Colors.black),
+      );
+
+      // Ø¥Ø¶Ø§ÙØ© Ù…Ø³ØªÙ…Ø¹ Ù„Ù€ "Ø§Ù„ØªØ´ØºÙŠÙ„ Ø§Ù„ØªÙ„Ù‚Ø§Ø¦ÙŠ"
+      _videoPlayerController!.addListener(_onVideoEndListener);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+    } catch (e) {
+      if (!mounted) return;
+      print("Error initializing episode: $e");
+      setState(() {
+        _isLoading = false;
+        _error = "Ù„Ø§ ÙŠÙ…ÙƒÙ† ØªØ­Ù…ÙŠÙ„ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ. ÙŠØ±Ø¬Ù‰ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ù„Ø§Ø­Ù‚Ø§Ù‹.";
+      });
+    }
+  }
+
+  // Ù…Ø³ØªÙ…Ø¹ Ø§Ù†ØªÙ‡Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ
+  void _onVideoEndListener() {
+    if (_videoPlayerController == null || !_videoPlayerController!.value.isInitialized) {
+      return;
+    }
+
+    final position = _videoPlayerController!.value.position;
+    final duration = _videoPlayerController!.value.duration;
+
+    // Ø§Ù„ØªØ£ÙƒØ¯ Ø£Ù†Ù†Ø§ ÙÙŠ Ù†Ù‡Ø§ÙŠØ© Ø§Ù„ÙÙŠØ¯ÙŠÙˆ (Ù…Ø¹ Ù‡Ø§Ù…Ø´ ØµØºÙŠØ±)
+    if (duration - position < const Duration(seconds: 1) &&
+        !_videoPlayerController!.value.isPlaying) {
+      _videoPlayerController!.removeListener(_onVideoEndListener);
+      _playNextEpisode();
+    }
+  }
+
+  // Ø¯Ø§Ù„Ø© ØªØ´ØºÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªØ§Ù„ÙŠØ©
+  Future<void> _playNextEpisode() async {
+    // Ù…Ø³Ø­ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸ Ù„Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªÙŠ Ø§Ù†ØªÙ‡Øª
+    await PlaybackPositionManager.savePosition(_currentEpisode!.id, Duration.zero);
+
+    if (_currentIndex + 1 < widget.episodes.length) {
+      // Ù‡Ù†Ø§Ùƒ Ø­Ù„Ù‚Ø© ØªØ§Ù„ÙŠØ©ØŒ Ù‚Ù… Ø¨ØªÙ‡ÙŠØ¦ØªÙ‡Ø§
+      _initializeEpisode(_currentIndex + 1);
+    } else {
+      // Ù‡Ø°Ù‡ Ù‡ÙŠ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø£Ø®ÙŠØ±Ø©
+      print("End of season.");
+      if (mounted) {
+        Navigator.of(context).pop(); // Ø§Ù„Ø¹ÙˆØ¯Ø© Ù„ØµÙØ­Ø© Ø§Ù„ØªÙØ§ØµÙŠÙ„
+      }
+    }
+  }
+
+  // Ø­ÙØ¸ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø¹Ù†Ø¯ Ø§Ù„Ø®Ø±ÙˆØ¬
+  Future<void> _savePosition() async {
+    if (_videoPlayerController != null && _currentEpisode != null && _videoPlayerController!.value.isInitialized) {
+      final position = _videoPlayerController!.value.position;
+      if (position > Duration.zero) {
+        await PlaybackPositionManager.savePosition(_currentEpisode!.id, position);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _savePosition(); // Ø­ÙØ¸ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø¹Ù†Ø¯ Ø§Ù„Ø¥ØºÙ„Ø§Ù‚
+    _videoPlayerController?.removeListener(_onVideoEndListener);
+    _videoPlayerController?.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Ø§Ø³ØªØ®Ø¯Ø§Ù… WillPopScope Ù„Ø§Ø¹ØªØ±Ø§Ø¶ Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹ ÙˆØ­ÙØ¸ Ø§Ù„Ù…ÙˆØ¶Ø¹
+    return WillPopScope(
+      onWillPop: () async {
+        await _savePosition();
+        return true; // Ø§Ù„Ø³Ù…Ø§Ø­ Ø¨Ø§Ù„Ø±Ø¬ÙˆØ¹
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[100], // Ø®Ù„ÙÙŠØ© ÙØ§ØªØ­Ø©
+        body: Stack(
+          children: [
+            // --- 1. Ø§Ù„Ù…Ø´ØºÙ„ (ÙÙŠ Ø§Ù„Ø£Ø¹Ù„Ù‰) ---
+            _buildPlayerHeader(),
+
+            // --- 2. Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„Ø³Ø­Ø¨ ---
+            DraggableScrollableSheet(
+              initialChildSize: 0.55, // Ø§Ø¨Ø¯Ø£ Ù…Ù† 55% Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø©
+              minChildSize: 0.55,
+              maxChildSize: 0.9, // Ø§Ø³Ù…Ø­ Ø¨Ø§Ù„Ø³Ø­Ø¨ Ø­ØªÙ‰ 90%
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)),
+                    ],
+                  ),
+                  child: _buildInfoPanel(scrollController),
+                );
+              },
+            ),
+
+            // --- 3. Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹ ---
+            _buildBackButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- ÙˆÙŠØ¯Ø¬ØªØ³ Ø¨Ù†Ø§Ø¡ Ø§Ù„ÙˆØ§Ø¬Ù‡Ø© ---
+
+  // ÙˆÙŠØ¯Ø¬Øª Ù„Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø¬Ø²Ø¡ Ø§Ù„Ø¹Ù„ÙˆÙŠ (Ø§Ù„Ù…Ø´ØºÙ„)
+  Widget _buildPlayerHeader() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Ø¬Ø¹Ù„ Ø§Ù„Ù…Ø´ØºÙ„ ÙŠØ£Ø®Ø° 45% Ù…Ù† Ø§Ø±ØªÙØ§Ø¹ Ø§Ù„Ø´Ø§Ø´Ø©
+    return Container(
+      height: screenHeight * 0.45,
+      width: double.infinity,
+      color: Colors.black, // Ø®Ù„ÙÙŠØ© Ø³ÙˆØ¯Ø§Ø¡ Ù„Ù„Ù…Ø´ØºÙ„
+      child: _buildPlayerWidget(), // Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù…Ø´ØºÙ„ Ø§Ù„ÙØ¹Ù„ÙŠ
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù…Ø´ØºÙ„ (Ø£Ùˆ Ø§Ù„ØªØ­Ù…ÙŠÙ„ Ø£Ùˆ Ø§Ù„Ø®Ø·Ø£)
+  Widget _buildPlayerWidget() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+    // Ø¥Ø°Ø§ Ù†Ø¬Ø­ØŒ Ø§Ø¹Ø±Ø¶ Ø§Ù„Ù…Ø´ØºÙ„
+    return Chewie(
+      controller: _chewieController!,
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹
+  Widget _buildBackButton() {
+    return Positioned(
+      top: 40,
+      left: 16,
+      child: SafeArea(
+        child: CircleAvatar(
+          backgroundColor: Colors.black.withOpacity(0.5),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª (Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ© + Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©)
+  Widget _buildInfoPanel(ScrollController scrollController) {
+    // Ø­Ø³Ø§Ø¨ Ø¹Ø¯Ø¯ Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù…ØªØ¨Ù‚ÙŠØ©
+    final int remainingEpisodesCount = widget.episodes.length - _currentIndex - 1;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.all(20.0),
+        children: [
+          // 1. Ù…Ù‚Ø¨Ø¶ Ø§Ù„Ø³Ø­Ø¨
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©
+          Text(
+            _currentEpisode?.title ?? "ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¹Ù†ÙˆØ§Ù†...",
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 3. Ù…Ø¯Ø© Ø§Ù„Ø­Ù„Ù‚Ø©
+          if (_currentEpisode?.runTime != null && _currentEpisode!.runTime!.isNotEmpty)
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, color: Colors.grey[600], size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  _currentEpisode!.runTime!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+
+          const Divider(height: 32),
+
+          // 4. Ø¹Ù†ÙˆØ§Ù† "Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©"
+          Text(
+            "Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©:",
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 5. Ø¨Ù†Ø§Ø¡ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©
+          if (remainingEpisodesCount <= 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(child: Text("Ø£Ù†Øª ØªØ´Ø§Ù‡Ø¯ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø£Ø®ÙŠØ±Ø© ÙÙŠ Ø§Ù„Ù…ÙˆØ³Ù….")),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: remainingEpisodesCount,
+              itemBuilder: (context, index) {
+                // Ø­Ø³Ø§Ø¨ Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„ØµØ­ÙŠØ­ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø£ØµÙ„ÙŠØ©
+                final int episodeIndex = _currentIndex + 1 + index;
+                final episode = widget.episodes[episodeIndex];
+
+                return EpisodeListItem(
+                  episode: episode,
+                  onTap: () {
+                    // ØªØ´ØºÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªÙŠ ØªÙ… Ø§Ù„Ø¶ØºØ· Ø¹Ù„ÙŠÙ‡Ø§
+                    _initializeEpisode(episodeIndex);
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\video_player\video_player_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\screens\video_player\youtube_player_screen.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import '../../../data/models/episode_item.dart';
+import '../../../data/repositories/program_repository.dart';
+import '../../../data/playback_position_manager.dart';
+import '../../widgets/episode_list_item.dart'; // <-- 1. Ø§Ø³ØªÙŠØ±Ø§Ø¯ ÙˆÙŠØ¯Ø¬Øª Ø§Ù„Ø­Ù„Ù‚Ø©
+
+class YouTubePlayerScreen extends StatefulWidget {
+  final List<EpisodeItem> episodes;
+  final int startIndex;
+  final ProgramRepository repository;
+  final String initialVideoId; // Ø³Ù†Ø±Ø³Ù„ ID Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ù…Ø¨Ø§Ø´Ø±Ø©
+
+  const YouTubePlayerScreen({
+    super.key,
+    required this.episodes,
+    required this.startIndex,
+    required this.repository,
+    required this.initialVideoId,
+  });
+
+  @override
+  State<YouTubePlayerScreen> createState() => _YouTubePlayerScreenState();
+}
+
+class _YouTubePlayerScreenState extends State<YouTubePlayerScreen> {
+  YoutubePlayerController? _controller;
+  late int _currentIndex;
+  EpisodeItem? _currentEpisode;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.startIndex;
+    _currentEpisode = widget.episodes[_currentIndex];
+    _initializePlayer(widget.initialVideoId);
+  }
+
+  Future<void> _initializePlayer(String videoId, {bool isNewEpisode = false}) async {
+    if (!mounted) return;
+
+    // Ø¥Ø¸Ù‡Ø§Ø± Ø§Ù„ØªØ­Ù…ÙŠÙ„
+    setState(() { _isLoading = true; });
+
+    // Ø¥ÙŠÙ‚Ø§Ù Ø§Ù„Ù…ØªØ­ÙƒÙ… Ø§Ù„Ù‚Ø¯ÙŠÙ… Ø¥Ø°Ø§ ÙƒØ§Ù† Ù…ÙˆØ¬ÙˆØ¯Ø§Ù‹
+    if (_controller != null && isNewEpisode) {
+      _controller!.removeListener(_onPlayerStateChange);
+      // Ù„Ø§ Ù†Ø³ØªØ®Ø¯Ù… dispose() Ù‡Ù†Ø§ØŒ Ø³Ù†Ø³ØªØ®Ø¯Ù… load() Ù„ØªØºÙŠÙŠØ± Ø§Ù„ÙÙŠØ¯ÙŠÙˆ
+    }
+
+    // Ø¬Ù„Ø¨ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸
+    final startAt = await PlaybackPositionManager.getPosition(_currentEpisode!.id);
+
+    if (_controller == null) {
+      // Ø§Ù„ØªÙ‡ÙŠØ¦Ø© Ù„Ø£ÙˆÙ„ Ù…Ø±Ø©
+      _controller = YoutubePlayerController(
+        initialVideoId: videoId,
+        flags: YoutubePlayerFlags(
+          autoPlay: true,
+          startAt: startAt.inSeconds, // Ø¨Ø¯Ø¡ Ø§Ù„ØªØ´ØºÙŠÙ„ Ù…Ù† Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸
+        ),
+      );
+      _controller!.addListener(_onPlayerStateChange);
+    } else {
+      // ØªØ­Ù…ÙŠÙ„ ÙÙŠØ¯ÙŠÙˆ Ø¬Ø¯ÙŠØ¯ Ø¹Ù„Ù‰ Ù†ÙØ³ Ø§Ù„Ù…Ø´ØºÙ„
+      _controller!.load(videoId, startAt: startAt.inSeconds);
+    }
+
+    setState(() {
+      _isLoading = false;
+      _currentEpisode = widget.episodes[_currentIndex];
+    });
+  }
+
+  // Ù…Ø³ØªÙ…Ø¹ Ø§Ù†ØªÙ‡Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ
+  void _onPlayerStateChange() {
+    if (_controller != null && _controller!.value.playerState == PlayerState.ended) {
+      _controller!.removeListener(_onPlayerStateChange); // Ù…Ù†Ø¹ Ø§Ù„ØªÙƒØ±Ø§Ø±
+      _playNextEpisode();
+    }
+  }
+
+  // Ø¯Ø§Ù„Ø© Ù„Ø§Ø®ØªÙŠØ§Ø± Ø­Ù„Ù‚Ø© Ù…Ø¹ÙŠÙ†Ø© (Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø©)
+  Future<void> _playEpisodeByIndex(int index) async {
+    // 1. Ø­ÙØ¸ Ù…ÙˆØ¶Ø¹ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ù‚Ø¯ÙŠÙ…Ø©
+    await _savePosition();
+
+    // 2. ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ ÙˆØ§Ù„Ø­Ù„Ù‚Ø©
+    _currentIndex = index;
+    final nextEpisode = widget.episodes[_currentIndex];
+
+    // 3. Ø¬Ù„Ø¨ Ø§Ù„Ø±Ø§Ø¨Ø· ÙˆØ§Ù„ØªØ£ÙƒØ¯ Ø£Ù†Ù‡ ÙŠÙˆØªÙŠÙˆØ¨
+    final episodeDetails = await widget.repository.getEpisodeDetails(nextEpisode.id);
+    final videoUrl = episodeDetails.urlLink;
+
+    if (videoUrl != null && (videoUrl.contains("youtube.com") || videoUrl.contains("youtu.be"))) {
+      final nextVideoId = YoutubePlayer.convertUrlToId(videoUrl) ?? '';
+      if (nextVideoId.isNotEmpty) {
+        // 4. ØªÙ‡ÙŠØ¦Ø© Ø§Ù„Ù…Ø´ØºÙ„ Ø¨Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø¬Ø¯ÙŠØ¯
+        _initializePlayer(nextVideoId, isNewEpisode: true);
+      }
+    } else {
+      // 5. Ø¥Ø°Ø§ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªØ§Ù„ÙŠØ© Ù„ÙŠØ³Øª ÙŠÙˆØªÙŠÙˆØ¨ØŒ Ø§Ø±Ø¬Ø¹ Ù„ØµÙØ­Ø© Ø§Ù„ØªÙØ§ØµÙŠÙ„
+      // (ØµÙØ­Ø© Ø§Ù„ØªÙØ§ØµÙŠÙ„ Ø³ØªÙ‚ÙˆÙ… Ø¨Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„ØªÙˆØ¬ÙŠÙ‡ Ù„Ù„Ù…Ø´ØºÙ„ Ø§Ù„ØµØ­ÙŠØ­)
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  // Ø¯Ø§Ù„Ø© ØªØ´ØºÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªØ§Ù„ÙŠØ© (ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹)
+  Future<void> _playNextEpisode() async {
+    // Ù…Ø³Ø­ Ø§Ù„Ù…ÙˆØ¶Ø¹ Ø§Ù„Ù…Ø­ÙÙˆØ¸ Ù„Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªÙŠ Ø§Ù†ØªÙ‡Øª
+    await PlaybackPositionManager.savePosition(_currentEpisode!.id, Duration.zero);
+
+    if (_currentIndex + 1 < widget.episodes.length) {
+      // Ù‡Ù†Ø§Ùƒ Ø­Ù„Ù‚Ø© ØªØ§Ù„ÙŠØ©ØŒ Ù‚Ù… Ø¨ØªØ´ØºÙŠÙ„Ù‡Ø§
+      _playEpisodeByIndex(_currentIndex + 1);
+    } else {
+      // Ù‡Ø°Ù‡ Ù‡ÙŠ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø£Ø®ÙŠØ±Ø©
+      if (mounted) {
+        Navigator.of(context).pop(); // Ø§Ù„Ø¹ÙˆØ¯Ø© Ù„ØµÙØ­Ø© Ø§Ù„ØªÙØ§ØµÙŠÙ„
+      }
+    }
+  }
+
+  // Ø­ÙØ¸ Ø§Ù„Ù…ÙˆØ¶Ø¹
+  Future<void> _savePosition() async {
+    if (_controller != null && _controller!.value.isReady && _currentEpisode != null) {
+      final position = _controller!.value.position; // Ù†ÙˆØ¹ Duration
+      if (position > Duration.zero) {
+        await PlaybackPositionManager.savePosition(_currentEpisode!.id, position);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _savePosition();
+    _controller?.removeListener(_onPlayerStateChange);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        await _savePosition();
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[100], // Ø®Ù„ÙÙŠØ© ÙØ§ØªØ­Ø©
+        body: Stack(
+          children: [
+            // --- 1. Ø§Ù„Ù…Ø´ØºÙ„ (ÙÙŠ Ø§Ù„Ø£Ø¹Ù„Ù‰) ---
+            _buildPlayerHeader(),
+
+            // --- 2. Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„Ø³Ø­Ø¨ ---
+            DraggableScrollableSheet(
+              initialChildSize: 0.55, // Ø§Ø¨Ø¯Ø£ Ù…Ù† 55% Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø©
+              minChildSize: 0.55,
+              maxChildSize: 0.9,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)),
+                    ],
+                  ),
+                  child: _buildInfoPanel(scrollController),
+                );
+              },
+            ),
+
+            // --- 3. Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹ ---
+            _buildBackButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- ÙˆÙŠØ¯Ø¬ØªØ³ Ø¨Ù†Ø§Ø¡ Ø§Ù„ÙˆØ§Ø¬Ù‡Ø© ---
+
+  // ÙˆÙŠØ¯Ø¬Øª Ù„Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø¬Ø²Ø¡ Ø§Ù„Ø¹Ù„ÙˆÙŠ (Ø§Ù„Ù…Ø´ØºÙ„)
+  Widget _buildPlayerHeader() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    return Container(
+      height: screenHeight * 0.45, // 45% Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø©
+      width: double.infinity,
+      color: Colors.black, // Ø®Ù„ÙÙŠØ© Ø³ÙˆØ¯Ø§Ø¡ Ù„Ù„Ù…Ø´ØºÙ„
+      child: _buildPlayerWidget(), // Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù…Ø´ØºÙ„ Ø§Ù„ÙØ¹Ù„ÙŠ
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ø§Ù„Ù…Ø´ØºÙ„ (Ø£Ùˆ Ø§Ù„ØªØ­Ù…ÙŠÙ„)
+  Widget _buildPlayerWidget() {
+    if (_isLoading || _controller == null) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    // Ø¥Ø°Ø§ Ù†Ø¬Ø­ØŒ Ø§Ø¹Ø±Ø¶ Ø§Ù„Ù…Ø´ØºÙ„
+    return YoutubePlayer(
+      controller: _controller!,
+      showVideoProgressIndicator: true,
+      progressIndicatorColor: Colors.red,
+      progressColors: const ProgressBarColors(
+        playedColor: Colors.red,
+        handleColor: Colors.redAccent,
+      ),
+      onReady: () {
+        // Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù…Ø³ØªÙ…Ø¹ Ø¨Ø¹Ø¯ Ø£Ù† ÙŠØµØ¨Ø­ Ø§Ù„Ù…Ø´ØºÙ„ Ø¬Ø§Ù‡Ø²Ø§Ù‹
+        _controller!.addListener(_onPlayerStateChange);
+      },
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ø²Ø± Ø§Ù„Ø±Ø¬ÙˆØ¹
+  Widget _buildBackButton() {
+    return Positioned(
+      top: 40,
+      left: 16,
+      child: SafeArea(
+        child: CircleAvatar(
+          backgroundColor: Colors.black.withOpacity(0.5),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ÙˆÙŠØ¯Ø¬Øª Ø¨Ù†Ø§Ø¡ Ù„ÙˆØ­Ø© Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª (Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ© + Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©)
+  Widget _buildInfoPanel(ScrollController scrollController) {
+    // Ø­Ø³Ø§Ø¨ Ø¹Ø¯Ø¯ Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„Ù…ØªØ¨Ù‚ÙŠØ©
+    final int remainingEpisodesCount = widget.episodes.length - _currentIndex - 1;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.all(20.0),
+        children: [
+          // 1. Ù…Ù‚Ø¨Ø¶ Ø§Ù„Ø³Ø­Ø¨
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©
+          Text(
+            _currentEpisode?.title ?? "ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¹Ù†ÙˆØ§Ù†...",
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 3. Ù…Ø¯Ø© Ø§Ù„Ø­Ù„Ù‚Ø©
+          if (_currentEpisode?.runTime != null && _currentEpisode!.runTime!.isNotEmpty)
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, color: Colors.grey[600], size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  _currentEpisode!.runTime!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+
+          const Divider(height: 32),
+
+          // 4. Ø¹Ù†ÙˆØ§Ù† "Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©"
+          Text(
+            "Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©:",
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // 5. Ø¨Ù†Ø§Ø¡ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ù„Ù‚Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ©
+          if (remainingEpisodesCount <= 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(child: Text("Ø£Ù†Øª ØªØ´Ø§Ù‡Ø¯ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„Ø£Ø®ÙŠØ±Ø© ÙÙŠ Ø§Ù„Ù…ÙˆØ³Ù….")),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: remainingEpisodesCount,
+              itemBuilder: (context, index) {
+                // Ø­Ø³Ø§Ø¨ Ø§Ù„Ø§Ù†Ø¯ÙƒØ³ Ø§Ù„ØµØ­ÙŠØ­ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø£ØµÙ„ÙŠØ©
+                final int episodeIndex = _currentIndex + 1 + index;
+                final episode = widget.episodes[episodeIndex];
+
+                return EpisodeListItem(
+                  episode: episode,
+                  onTap: () {
+                    // ØªØ´ØºÙŠÙ„ Ø§Ù„Ø­Ù„Ù‚Ø© Ø§Ù„ØªÙŠ ØªÙ… Ø§Ù„Ø¶ØºØ· Ø¹Ù„ÙŠÙ‡Ø§
+                    _playEpisodeByIndex(episodeIndex);
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\screens\video_player\youtube_player_screen.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\episode_list_item.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../data/models/episode_item.dart';
+
+class EpisodeListItem extends StatelessWidget {
+  final EpisodeItem episode;
+  final VoidCallback onTap;
+
+  const EpisodeListItem({
+    super.key,
+    required this.episode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          children: [
+            // ØµÙˆØ±Ø© Ø§Ù„Ø­Ù„Ù‚Ø©
+            SizedBox(
+              width: 120,
+              child: AspectRatio(
+                aspectRatio: 9 / 10,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    // ØªØ£ÙƒØ¯ Ù…Ù† Ø£Ù† episode.image Ù„ÙŠØ³ null Ø£Ùˆ ÙØ§Ø±ØºØ§Ù‹
+                    imageUrl: episode.image ?? '',
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.black12,
+                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0)),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.black12,
+                      child: const Icon(Icons.image_not_supported, color: Colors.black26),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø­Ù„Ù‚Ø© ÙˆÙ…Ø¹Ù„ÙˆÙ…Ø§ØªÙ‡Ø§
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    episode.title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  // Ø¥Ø¸Ù‡Ø§Ø± Ù…Ø¯Ø© Ø§Ù„Ø­Ù„Ù‚Ø© ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù†Øª Ù…ÙˆØ¬ÙˆØ¯Ø©
+                  if (episode.runTime != null && episode.runTime!.isNotEmpty)
+                    Text(
+                      episode.runTime!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.black54,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Ø£ÙŠÙ‚ÙˆÙ†Ø© Ø§Ù„ØªØ´ØºÙŠÙ„
+            const Icon(Icons.play_circle_outline, color: Colors.black45, size: 28),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\episode_list_item.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\expandable_description.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:flutter_html/flutter_html.dart'; // <-- 1. Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ø­Ø²Ù…Ø©
+
+class ExpandableDescription extends StatefulWidget {
+  final String text;
+
+  const ExpandableDescription({super.key, required this.text});
+
+  @override
+  State<ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<ExpandableDescription> {
+  bool _isExpanded = false;
+
+  // Ø§Ø±ØªÙØ§Ø¹ ØªÙ‚Ø±ÙŠØ¨ÙŠ Ù„Ù€ 3 Ø£Ø³Ø·Ø± (ÙŠÙ…ÙƒÙ†Ùƒ ØªØ¹Ø¯ÙŠÙ„Ù‡)
+  static const double _collapsedHeight = 65.0;
+
+  @override
+  Widget build(BuildContext context) {
+
+    // ØªØ¹Ø±ÙŠÙ Ø§Ù„Ø£Ù†Ù…Ø§Ø· Ø§Ù„Ù…Ø´ØªØ±ÙƒØ© (Ù…Ø³ØªÙØ§Ø¯Ø© Ù…Ù† Ø§Ù„ÙƒÙˆØ¯ Ø§Ù„Ù‚Ø¯ÙŠÙ…)
+    final Map<String, Style> htmlStyles = {
+      "body": Style(
+        // Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø­Ø¬Ù… Ø§Ù„Ø®Ø· Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ Ù…Ù† Ø§Ù„Ø«ÙŠÙ…
+        fontSize: FontSize(Theme.of(context).textTheme.bodyMedium!.fontSize!),
+        color: Colors.black54, // Ù„ÙˆÙ† Ø§Ù„Ù†Øµ Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ
+        margin: Margins.zero, // Ù„Ø¥Ø²Ø§Ù„Ø© Ø§Ù„Ù‡ÙˆØ§Ù…Ø´ Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠØ©
+        padding: HtmlPaddings.zero, // Ù„Ø¥Ø²Ø§Ù„Ø© Ø§Ù„Ø­Ø´Ùˆ Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ
+        lineHeight: LineHeight.number(1.5), // Ù„ØªØ¨Ø§Ø¹Ø¯ Ø§Ù„Ø£Ø³Ø·Ø±
+      ),
+      "strong": Style(
+        fontWeight: FontWeight.bold,
+        color: Colors.black87,
+      ),
+      // ÙŠÙ…ÙƒÙ†Ùƒ Ø¥Ø¶Ø§ÙØ© Ø£Ù†Ù…Ø§Ø· Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§ (Ù…Ø«Ù„ p, a, etc.)
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 2. Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø­Ø§ÙˆÙŠØ© Ù…ØªØºÙŠØ±Ø© Ø§Ù„Ø§Ø±ØªÙØ§Ø¹ Ù„Ø¹Ø±Ø¶ Ø§Ù„Ù€ HTML
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          // Ø¥Ø°Ø§ ÙƒØ§Ù† Ù…Ø·ÙˆÙŠØ§Ù‹ØŒ Ø­Ø¯Ø¯ Ø§Ù„Ø§Ø±ØªÙØ§Ø¹. Ø¥Ø°Ø§ ÙƒØ§Ù† Ù…ÙØªÙˆØ­Ø§Ù‹ØŒ Ø¯Ø¹Ù‡ ÙŠØªÙ…Ø¯Ø¯ (null)
+          height: _isExpanded ? null : _collapsedHeight,
+          // Ù‚Øµ Ø§Ù„Ù…Ø­ØªÙˆÙ‰ Ø§Ù„Ø²Ø§Ø¦Ø¯ ÙÙŠ Ø­Ø§Ù„Ø© Ø§Ù„Ø·ÙŠ
+          clipBehavior: Clip.hardEdge,
+          decoration: const BoxDecoration(), // Ø¶Ø±ÙˆØ±ÙŠ Ù„Ù€ clipBehavior
+          child: Html(
+            data: widget.text.isEmpty ? "Ù„Ø§ ÙŠÙˆØ¬Ø¯ ÙˆØµÙ." : widget.text, // <-- Ø§Ø³ØªØ®Ø¯Ø§Ù… Html Ù‡Ù†Ø§
+            style: htmlStyles, // <-- ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ø£Ù†Ù…Ø§Ø·
+          ),
+        ),
+
+        // 3. Ø²Ø± "Ø§Ù‚Ø±Ø£ Ø§Ù„Ù…Ø²ÙŠØ¯" / "Ø¹Ø±Ø¶ Ø£Ù‚Ù„"
+        // (Ù„Ø§ ØªØ¸Ù‡Ø± Ø§Ù„Ø²Ø± Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ù†Øµ Ù‚ØµÙŠØ±Ø§Ù‹)
+        if (widget.text.length > 100) // ØªÙ‚Ø¯ÙŠØ± ØªÙ‚Ø±ÙŠØ¨ÙŠ Ù„Ø·ÙˆÙ„ Ø§Ù„Ù†Øµ
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text(
+                _isExpanded ? "Ø¹Ø±Ø¶ Ø£Ù‚Ù„" : "Ø§Ù‚Ø±Ø£ Ø§Ù„Ù…Ø²ÙŠØ¯...",
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\expandable_description.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\genre_card.dart ==== */
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import '../../data/models/genre_data.dart'; // Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù…ÙˆØ¯Ù„ Ø§Ù„ØªØµÙ†ÙŠÙ
+
+class GenreCard extends StatelessWidget {
+  final GenreData genre;
+  final VoidCallback onTap;
+
+  const GenreCard({
+    super.key,
+    required this.genre,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8.0), // Ù„Ø¬Ø¹Ù„ ØªØ£Ø«ÙŠØ± Ø§Ù„Ù†Ù‚Ø± Ø¯Ø§Ø¦Ø±ÙŠØ§Ù‹
+      child: Stack(
+        children: [
+          // 1. Ø§Ù„ØµÙˆØ±Ø© (ØªÙ…Ù„Ø£ Ø§Ù„ÙƒØ§Ø±Øª)
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: CachedNetworkImage(
+                imageUrl: genre.genreImage ?? '', // Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø±Ø§Ø¨Ø· Ø§Ù„ØµÙˆØ±Ø©
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(color: Colors.black12),
+                errorWidget: (context, url, error) => Container(
+                  color: Colors.blueGrey[100], // Ù„ÙˆÙ† Ø¨Ø¯ÙŠÙ„ Ø¥Ø°Ø§ Ù„Ø§ ØªÙˆØ¬Ø¯ ØµÙˆØ±Ø©
+                  child: Center(
+                    child: Icon(Icons.category_outlined, color: Colors.grey[600], size: 30),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 2. ÙÙ„ØªØ± ØºØ§Ù…Ù‚ ÙÙŠ Ø§Ù„Ø£Ø³ÙÙ„
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 50, // Ø§Ø±ØªÙØ§Ø¹ Ø§Ù„ÙÙ„ØªØ±
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8.0)),
+                gradient: LinearGradient(
+                  colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+            ),
+          ),
+          // 3. Ø§Ø³Ù… Ø§Ù„ØªØµÙ†ÙŠÙ (ÙÙˆÙ‚ Ø§Ù„ÙÙ„ØªØ±)
+          Positioned(
+            bottom: 8,
+            left: 8,
+            right: 8,
+            child: Text(
+              genre.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                shadows: [Shadow(color: Colors.black54, blurRadius: 2)], // Ø¸Ù„ Ù„Ù„Ù†Øµ
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\genre_card.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\horizontal_program_row.dart ==== */
+
+import 'package:flutter/material.dart';
+import '../../data/models/program_item.dart';
+import '../screens/program_detail/program_detail_screen.dart';
+import 'program_card.dart';
+
+/// A widget that displays a horizontal row of programs with a title.
+class HorizontalProgramRow extends StatelessWidget {
+  final String title;
+  final List<ProgramItem> programs;
+  final double rowHeight;
+  final double cardAspectRatio;
+  final double cardWidth;
+
+  /// A callback that is invoked when a program card is tapped.
+  /// If provided, this callback will override the default navigation behavior.
+  final void Function(ProgramItem tappedItem)? onItemTap;
+
+  const HorizontalProgramRow({
+    super.key,
+    required this.title,
+    required this.programs,
+    this.rowHeight = 180.0,
+    this.cardAspectRatio = 16 / 9,
+    this.cardWidth = 150.0,
+    this.onItemTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // If there are no programs, don't display anything.
+    if (programs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Row Title
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.black45,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withAlpha(178), // Use withAlpha for better performance
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                )
+              ],
+            ),
+          ),
+        ),
+        // Horizontal List of Program Cards
+        SizedBox(
+          height: rowHeight,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: programs.length,
+            itemBuilder: (context, index) {
+              final program = programs[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  left: index == 0 ? 16.0 : 8.0,
+                  right: index == programs.length - 1 ? 16.0 : 0.0,
+                ),
+                child: ProgramCard(
+                  program: program,
+                  width: cardWidth,
+                  aspectRatio: cardAspectRatio,
+                  onTap: () {
+                    // If a custom tap handler is provided, use it.
+                    // Otherwise, fall back to the default behavior.
+                    if (onItemTap != null) {
+                      onItemTap!(program);
+                    } else {
+                      // Default behavior: navigate to details screen for TV shows.
+                      if (program.postType == "tv_show") {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProgramDetailScreen(programId: program.id),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\horizontal_program_row.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\live_stream_embed_widget.dart ==== */
+
+import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+
+class LiveStreamEmbedWidget extends StatefulWidget {
+  const LiveStreamEmbedWidget({super.key});
+
+  @override
+  State<LiveStreamEmbedWidget> createState() => _LiveStreamEmbedWidgetState();
+}
+
+class _LiveStreamEmbedWidgetState extends State<LiveStreamEmbedWidget> with AutomaticKeepAliveClientMixin {
+
+  late final WebViewController _controller;
+
+  // --- 1. Define the Background Image URL ---
+  final String backgroundImageUrl = "https://daawah.tv/app1.jpg"; // Main app background
+
+  // --- 2. Enhanced Embed Code ---
+  late final String embedCode;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Build the HTML code dynamically
+    embedCode = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <style>
+        body, html {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          overflow: hidden;
+          background-color: #f0f0f0; /* Fallback background */
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          color: white; /* Default text color */
+        }
+        .container {
+          display: flex;
+          flex-direction: column;
+          height: 100vh; /* Full viewport height */
+        }
+        .video-container {
+          width: 100%;
+          /* Maintain 16:9 aspect ratio for video area */
+          padding-top: 56.25%;
+          position: relative;
+          background-color: #000; /* Black background for video */
+        }
+        .video-container iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          border: 0;
+        }
+        .info-panel {
+          flex-grow: 1; /* Take remaining vertical space */
+          background-image: url('$backgroundImageUrl'); /* App background */
+          background-size: cover;
+          background-position: center bottom; /* Adjust as needed */
+          padding: 15px 20px;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box; /* Include padding in height */
+          overflow-y: auto; /* Allow scrolling if content overflows */
+        }
+        .info-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 10px;
+        }
+        .title {
+          font-size: 1.6em; /* Larger title */
+          font-weight: bold;
+          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+        }
+        .heart-icon {
+          font-size: 1.8em; /* Adjust size */
+          color: #ff6b6b; /* Reddish color for heart */
+          /* Simple heart symbol (could use SVG or icon font if needed) */
+        }
+        .info-line {
+          display: flex;
+          align-items: center;
+          margin-bottom: 6px;
+          font-size: 0.9em;
+          opacity: 0.9;
+          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        .info-line svg { /* Style for potential SVG icons */
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            fill: white; /* Make icons white */
+        }
+        .info-line span { /* For text next to icon */
+           display: inline-block;
+        }
+        /* Basic icon placeholders (replace with actual SVG if possible) */
+        .icon-tv::before { content: 'ðŸ“º'; margin-right: 8px; }
+        .icon-time::before { content: 'ðŸ•’'; margin-right: 8px; }
+
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="video-container">
+          <iframe
+            src="https://player.onestream.live/embed?token=NDA2NzYyNw==&type=up"
+            scrolling="no"
+            frameborder="0"
+            allow="autoplay"
+            allowfullscreen>
+          </iframe>
+        </div>
+        <div class="info-panel">
+          <div class="info-header">
+            <div class="title">Ø§Ù„Ø¨Ø« Ø§Ù„Ù…Ø¨Ø§Ø´Ø±</div>
+            <div class="heart-icon">&#x2661;</div> </div>
+          <div class="info-line">
+             <span class="icon-tv"></span> <span>Ù‚Ù†Ø§Ø© Ø¯Ø¹ÙˆØ© Ø§Ù„ÙØ¶Ø§Ø¦ÙŠØ©</span>
+          </div>
+          <div class="info-line">
+             <span class="icon-time"></span> <span>Ù…Ø³ØªÙ…Ø± 24/7</span>
+          </div>
+          </div>
+      </div>
+       <script>
+         // Optional JS if needed
+       </script>
+    </body>
+    </html>
+  ''';
+
+    // Initialize WebView Controller
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black) // Initial background
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {},
+          onPageFinished: (String url) {},
+          onWebResourceError: (WebResourceError error) {
+            print("WebView Error: ${error.description}");
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            // Allow initial load and iframe source
+            if (request.url == 'about:blank' || request.url.startsWith('https://player.onestream.live')) {
+              return NavigationDecision.navigate;
+            }
+            // Prevent navigating away
+            print("Prevented navigation to: ${request.url}");
+            return NavigationDecision.prevent;
+          },
+        ),
+      )
+    // Load the built HTML string
+      ..loadHtmlString(embedCode, baseUrl: null); // Use baseUrl: null for data URI
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    // Use AspectRatio to constrain the WebView height within the TabBarView
+    // Adjust the ratio as needed (e.g., 9/16 for portrait video or less for more info panel space)
+    return AspectRatio(
+      aspectRatio: MediaQuery.of(context).size.width / (MediaQuery.of(context).size.height * 0.8), // Adjust height dynamically or use a fixed ratio
+      child: WebViewWidget(controller: _controller),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\live_stream_embed_widget.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\presentation\widgets\program_card.dart ==== */
+
+import 'package:cached_network_image/cached_network_image.dart';
+  import 'package:flutter/material.dart';
+  import '../../data/models/program_item.dart';
+
+  class ProgramCard extends StatelessWidget {
+  final ProgramItem program;
+  final VoidCallback? onTap;
+  final double? width;
+  final double aspectRatio;
+
+  const ProgramCard({
+  super.key,
+  required this.program,
+  this.onTap,
+  this.width,
+  this.aspectRatio = 3 / 4,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+  // --- 1) Ø§Ù„ØªØ¹Ø§Ù…Ù„ Ù…Ø¹ Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ù€ Null / ÙØ§Ø±ØºØ© ---
+  final String imageUrl = program.image ?? '';
+
+  return InkWell(
+  onTap: onTap,
+  child: SizedBox(
+  width: width,
+  child: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  mainAxisSize: MainAxisSize.min,
+  children: [
+  AspectRatio(
+  aspectRatio: aspectRatio,
+  child: ClipRRect(
+  borderRadius: BorderRadius.circular(8.0),
+  child: CachedNetworkImage(
+  // --- 2) ØªÙ…Ø±ÙŠØ± Ø§Ù„Ø±Ø§Ø¨Ø· (Ù‚Ø¯ ÙŠÙƒÙˆÙ† ÙØ§Ø±ØºÙ‹Ø§) ---
+  imageUrl: imageUrl,
+  fit: BoxFit.cover,
+  placeholder: (context, url) => Container(
+  color: Colors.black12,
+  child: const Center(
+  child: SizedBox(
+  width: 22,
+  height: 22,
+  child: CircularProgressIndicator(strokeWidth: 2.0),
+  ),
+  ),
+  ),
+  // --- 3) Ø¨Ø¯ÙŠÙ„ Ø¹Ù†Ø¯ Ø§Ù„Ø®Ø·Ø£ Ø£Ùˆ Ø§Ù„Ø±Ø§Ø¨Ø· Ø§Ù„ÙØ§Ø±Øº ---
+  errorWidget: (context, url, error) => Container(
+  color: Colors.black12,
+  child: const Center(
+  child: Icon(
+  Icons.image_not_supported_outlined,
+  color: Colors.black45,
+  size: 30,
+  ),
+  ),
+  ),
+  ),
+  ),
+  ),
+
+  // --- Ø§Ù„Ø¹Ù†ÙˆØ§Ù† ---
+  Padding(
+  padding: const EdgeInsets.only(
+  top: 6.0,
+  bottom: 4.0,
+  left: 4.0,
+  right: 4.0,
+  ),
+  child: Text(
+  program.title,
+  maxLines: 2,
+  overflow: TextOverflow.ellipsis,
+  textAlign: TextAlign.start,
+  textDirection: TextDirection.rtl,
+  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+  color: Colors.black,
+  fontWeight: FontWeight.bold,
+
+  ),
+  ),
+  ),
+  ],
+  ),
+  ),
+  );
+  }
+  }
+
+/* ==== END FILE: C:\daawah_app\lib\presentation\widgets\program_card.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\utils\app_widgets.dart ==== */
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+
+// Ø¯Ø§Ù„Ø© ØµÙˆØ±Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠØ©
+String defaultUserProfile() => 'https://via.placeholder.com/150';
+
+// ØªØ¹Ø±ÙŠÙ ScrollBehavior (Ø¥Ø°Ø§ ÙƒÙ†Øª Ø³ØªØ³ØªØ®Ø¯Ù…Ù‡)
+ScrollBehavior scrollBehaviour() => const ScrollBehavior().copyWith(
+  scrollbars: false, // Ø¥Ø®ÙØ§Ø¡ Ø´Ø±ÙŠØ· Ø§Ù„ØªÙ…Ø±ÙŠØ±
+  dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+);
+
+// ÙŠÙ…ÙƒÙ†Ùƒ Ø¥Ø¶Ø§ÙØ© Ø£ÙŠ ÙˆØ¯Ø¬ØªØ§Øª Ø£Ùˆ Ø¯ÙˆØ§Ù„ Ù…Ø³Ø§Ø¹Ø¯Ø© Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§ Ù„Ø§Ø­Ù‚Ø§Ù‹
+
+/* ==== END FILE: C:\daawah_app\lib\utils\app_widgets.dart ==== */
+
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\utils\constants.dart ==== */
+
+// SharedPreferences Keys (Ø£Ù…Ø«Ù„Ø©ØŒ Ø£Ø¶Ù Ø§Ù„Ø¨Ø§Ù‚ÙŠ Ø­Ø³Ø¨ Ø§Ù„Ø­Ø§Ø¬Ø©)
+const String SELECTED_LANGUAGE_CODE = 'selectedLanguageCode';
+const String IS_LOGGED_IN = 'isLoggedIn';
+const String USER_ID = 'userId';
+const String USERNAME = 'username';
+const String USER_EMAIL = 'userEmail';
+const String USER_PROFILE = 'userProfile';
+const String NAME = 'firstName';
+const String LAST_NAME = 'lastName';
+const String DEVICE_ID = 'deviceId';
+const String TOKEN = 'token'; // Or whatever key you use to store the token in SharedPreferences/nb_utils
+// Ø£Ø¶Ù Ø£ÙŠ Ø«ÙˆØ§Ø¨Øª Ø£Ø®Ø±Ù‰ ØªØ­ØªØ§Ø¬Ù‡Ø§ (PMP_CURRENCY, WOO_NONCE, etc.)
+
+// ÙŠÙ…ÙƒÙ†Ùƒ Ø¥Ø¶Ø§ÙØ© Ø«ÙˆØ§Ø¨Øª Ø£Ø®Ø±Ù‰ Ù‡Ù†Ø§ (Ù…Ø«Ù„ Ø§Ù„Ø£Ù„ÙˆØ§Ù†ØŒ Ø§Ù„Ø±ÙˆØ§Ø¨Ø·ØŒ Ø¥Ù„Ø®)
+
+/* ==== END FILE: C:\daawah_app\lib\utils\constants.dart ==== */
+

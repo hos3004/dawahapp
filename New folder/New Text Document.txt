@@ -1,0 +1,30 @@
+2025-11-19 05:32:34.927 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:34.929  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: HighHint
+2025-11-19 05:32:34.983 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:37.985 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:37.996  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: NoPreference
+2025-11-19 05:32:40.872 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:40.876 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:40.879  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: HighHint
+2025-11-19 05:32:40.926 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:41.065 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:41.127 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:41.928 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:42.012 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:45.013 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:45.021  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: NoPreference
+2025-11-19 05:32:46.633 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:46.634 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:46.641  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: HighHint
+2025-11-19 05:32:46.738 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:47.652 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:47.738 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:48.988 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 0
+2025-11-19 05:32:49.132 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  ViewPostIme pointer 1
+2025-11-19 05:32:52.119  1669-1784  SurfaceFlinger          surfaceflinger                       I  Capture layer list: 	 Background for 8f6d2f8 SurfaceView[com.example.daawah_app/com.example.daawah_app.MainActivity]@0#4774(seamlessTransition:0)
+2025-11-19 05:32:52.119  1669-1784  SurfaceFlinger          surfaceflinger                       I  Capture layer list: 	 8f6d2f8 SurfaceView[com.example.daawah_app/com.example.daawah_app.MainActivity]@0(BLAST)#4773(seamlessTransition:0)
+2025-11-19 05:32:52.119  1669-1784  SurfaceFlinger          surfaceflinger                       I  Capture layer list: 	 com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768(seamlessTransition:0)
+2025-11-19 05:32:52.121  1669-1794  RenderEngine            surfaceflinger                       D  [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer 8f6d2f8 SurfaceView[com.example.daawah_app/com.example.daawah_app.MainActivity]@0(BLAST)#4773 at index 1
+2025-11-19 05:32:52.122  1669-1794  RenderEngine            surfaceflinger                       D  [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768 at index 2
+2025-11-19 05:32:52.133 30127-30127 VRI[MainAc...y]@d24edc3 com.example.daawah_app               I  call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@d24edc3
+2025-11-19 05:32:52.140  1669-1669  SurfaceFlinger          surfaceflinger                       I  [com.example.daawah_app/com.example.daawah_app.MainActivity$_30127#4768] setFrameRateCategory: NoPreference
