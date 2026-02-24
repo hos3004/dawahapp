@@ -23,6 +23,13 @@ dependencies:
   youtube_player_flutter: ^9.0.0
   # 1. [translate: لإدارة الحالة (BLoC)]
   flutter_bloc: ^8.1.5
+
+  get_it: ^7.6.0 # للحقن (DI)
+  injectable: ^2.3.2 # لتوليد كود الحقن
+  dio: ^5.4.0
+  rxdart: ^0.27.7 # مفيد جداً لدمج الـ Streams
+
+
   equatable: ^2.0.5
   google_fonts: ^6.2.1
   # 2. [translate: لجلب البيانات من الـ API]
@@ -34,6 +41,8 @@ dependencies:
   video_player: ^2.8.1
   chewie: ^1.7.4
   just_audio: ^0.10.5
+  audio_session: ^0.1.18 # لإدارة الصوت في الخلفية والمكالمات
+
   # 5. [translate: لعرض محتوى HTML (مثل وصف الحلقات)]
   flutter_html: ^3.0.0-beta.2
 
@@ -47,7 +56,14 @@ dependencies:
   url_launcher: ^6.3.0 # <-- أضف هذا السطر
   stream_transform: ^2.1.0 # Or latest version
   path_provider: ^2.1.1 # (أو أحدث إصدار)
+
+
+  html: any
 dev_dependencies:
+  injectable_generator: ^2.4.1
+  build_runner: ^2.4.8
+
+
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4   # [translate: أو أي إصدار حديث متوافق]
@@ -66,7 +82,7 @@ flutter:
     - assets/videos/Comp1.mp4
     - assets/images/logo.png
     - assets/images/bbg.jpg
-    - assets/icons/telegram.png   # <-- تأكد من إضافة هذا السطر
+    - assets/icons/telegram.png
     - assets/icons/x.png
     - assets/icons/fb.png
     - assets/icons/insta.png
@@ -78,7 +94,21 @@ flutter:
     - assets/quran/surahs_index.json
     - assets/quran/juzs_index.json
     - assets/quran/mushafs_list.json
+    - assets/json/quran_data/
+    # ملفات الإحداثيات (يجب تعريف المجلدات وليس الملفات الفردية)
+    - assets/json/coords_hafs/
+    - assets/json/coords_warsh/
+    - assets/json/coords_kalon/
+    - assets/json/coords_dory/
+    - assets/json/quran_data/
+    - assets/json/hafs/
+    - assets/web/aboutus.html
+    - assets/web/privacy.html
+    - assets/web/terms.html
 
+    - assets/json/quran_data/reciters_list.json
+    - assets/json/quran_data/surahs_list.json
+    - assets/json/quran_data/juzs_list.json
   # [translate: لإضافة الصور (Assets)]
   # assets:
   #   - images/logo.png

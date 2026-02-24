@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>من نحن - About Us | Daawah TV</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #eff6ff;
+            --text-dark: #1f2937;
+            --text-light: #4b5563;
+            --bg-color: #f9fafb;
+            --card-bg: #ffffff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-color); color: var(--text-dark); font-family: 'Inter', sans-serif; padding: 20px; line-height: 1.8; }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        /* Navigation */
+        .language-nav {
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .lang-btn {
+            text-decoration: none;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .lang-btn.ar { background-color: var(--accent-color); color: var(--primary-color); border-color: #bfdbfe; }
+        .lang-btn.en { background-color: #f3f4f6; color: var(--text-light); border-color: #e5e7eb; }
+        .lang-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
+
+        /* Content Styling */
+        .content-section { padding: 50px; }
+        .content-section:not(:last-child) { border-bottom: 1px solid #e5e7eb; }
+
+        h1 { font-size: 32px; margin-bottom: 10px; color: #111827; line-height: 1.3; }
+        .subtitle { display: block; font-size: 18px; color: var(--primary-color); margin-bottom: 30px; font-weight: 600; }
+        
+        h2 { 
+            font-size: 24px; 
+            margin-top: 40px; 
+            margin-bottom: 20px; 
+            color: var(--text-dark); 
+            position: relative;
+            display: inline-block;
+        }
+        
+        /* Decorative underline for H2 */
+        .rtl h2::after {
+            content: ''; display: block; width: 50%; height: 3px; background: var(--primary-color); margin-top: 8px; border-radius: 2px;
+        }
+        .ltr h2::after {
+            content: ''; display: block; width: 50%; height: 3px; background: var(--primary-color); margin-top: 8px; border-radius: 2px;
+        }
+
+        p { margin-bottom: 20px; color: var(--text-light); text-align: justify; font-size: 16px; }
+        
+        /* Grid for Values */
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .value-card {
+            background: var(--accent-color);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #dbeafe;
+        }
+        .value-card h3 { font-size: 18px; color: var(--secondary-color); margin-bottom: 10px; }
+        .value-card p { font-size: 14px; margin-bottom: 0; }
+
+        /* Lists */
+        ul, ol { margin-bottom: 25px; padding-inline-start: 25px; }
+        li { margin-bottom: 10px; color: var(--text-light); }
+        li strong { color: var(--text-dark); }
+
+        /* RTL & LTR Specifics */
+        .rtl { direction: rtl; font-family: 'Cairo', sans-serif; text-align: right; }
+        .ltr { direction: ltr; font-family: 'Inter', sans-serif; text-align: left; }
+
+        /* Footer */
+        .footer {
+            background-color: #111827;
+            padding: 30px;
+            text-align: center;
+            color: #9ca3af;
+            font-family: 'Cairo', sans-serif;
+        }
+        .footer a { color: #fff; text-decoration: none; opacity: 0.8; }
+        .footer a:hover { opacity: 1; }
+
+        @media (max-width: 768px) { 
+            .content-section { padding: 30px 20px; } 
+            h1 { font-size: 26px; } 
+            .values-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <nav class="language-nav">
+            <a href="#arabic-about" class="lang-btn ar">العربية</a>
+            <a href="#english-about" class="lang-btn en">English</a>
+        </nav>
+
+        <div id="arabic-about" class="content-section rtl">
+            <h1>من نحن؟</h1>
+            <span class="subtitle">قناة دعوة.. أصالة المنهج وروح العصر</span>
+
+            <p>قناة دعوة الفضائية هي منبر إعلامي إسلامي متميز، انطلقت لتكون صوتاً للحق ومنارة للهدى في فضاء الإعلام المفتوح. نحن لا نقدم مجرد محتوى تلفزيوني، بل نحمل رسالة حضارية تهدف إلى إعادة ربط الأمة بتراثها العظيم، وتقديم الإسلام بصورته النقية الصافية، بعيداً عن الغلو والتفريط، وفق منهج أهل السنة والجماعة. تسعى القناة من خلال برامجها المتنوعة وتطبيقها الإلكتروني إلى مخاطبة الفرد، والأسرة، والمجتمع، بأسلوب يجمع بين رصانة العلم الشرعي وجاذبية الطرح الإعلامي الحديث.</p>
+
+            <h2>رؤيتنا</h2>
+            <p>أن نكون المرجع الإعلامي الأول للأسرة المسلمة، والنموذج الرائد في صناعة المحتوى القيمي الذي يجمع بين الأصالة والمعاصرة، وصولاً إلى بناء مجتمع واعٍ متمسك بهويته، ومنفتح على عصره بثقة واقتدار.</p>
+
+            <h2>رسالتنا وأهدافنا</h2>
+            <p>تتمثل رسالتنا في تقديم محتوى إعلامي هادف ومحترف، يقوم على الركائز التالية:</p>
+            <ul>
+                <li><strong>نشر العلم الشرعي:</strong> تيسير العلوم الشرعية وتقريبها لعموم الناس من خلال استضافة كبار العلماء والدعاة الموثوقين.</li>
+                <li><strong>تعزيز القيم:</strong> غرس القيم الأخلاقية والتربوية في نفوس الناشئة والشباب لحمايتهم من التيارات الفكرية المنحرفة.</li>
+                <li><strong>حماية الأسرة:</strong> تقديم حلول واقعية للمشكلات الاجتماعية والأسرية، باعتبار الأسرة هي الحصن الأول للمجتمع.</li>
+                <li><strong>الدفاع عن الثوابت:</strong> الذب عن جناب النبي صلى الله عليه وسلم، وتفنيد الشبهات حول الإسلام بالحكمة والموعظة الحسنة.</li>
+            </ul>
+
+            <h2>قيمنا الجوهرية</h2>
+            <div class="values-grid">
+                <div class="value-card">
+                    <h3>الوسطية والاعتدال</h3>
+                    <p>نلتزم بمنهج الوسطية الذي هو سمة هذه الأمة، فلا إفراط ولا تفريط في الطرح.</p>
+                </div>
+                <div class="value-card">
+                    <h3>المصداقية</h3>
+                    <p>نتحرى الدقة في النقل، والأمانة في الطرح، والاعتماد على المصادر الموثوقة.</p>
+                </div>
+                <div class="value-card">
+                    <h3>الجودة والإتقان</h3>
+                    <p>نسعى لتقديم محتوى بصري وتقني يضاهي كبرى القنوات العالمية احتراماً للمشاهد.</p>
+                </div>
+                <div class="value-card">
+                    <h3>الأمان الأسري</h3>
+                    <p>نضمن خلو شاشتنا وتطبيقنا من أي محتوى خادش للحياء أو مخالف للشرع.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="english-about" class="content-section ltr">
+            <h1>About Us</h1>
+            <span class="subtitle">Daawah TV.. Authentic Heritage, Modern Vision</span>
+
+            <p>Daawah TV is a premier Islamic media platform dedicated to projecting the true essence of Islam. We are more than just a satellite channel; we are a civilizational project aimed at reconnecting the Ummah with its rich heritage while addressing contemporary challenges. Established on the principles of mainstream Sunni Islam (Ahlus Sunnah wal Jamaah), we strive to present religion in its purest form—balanced, moderate, and inspiring.</p>
+
+            <h2>Our Vision</h2>
+            <p>To become the leading global media reference for the Muslim family, setting the standard for value-based content that bridges the gap between authentic tradition and modern life, fostering a conscious community proud of its identity.</p>
+
+            <h2>Our Mission</h2>
+            <p>Our mission is to produce professional, purposeful content focused on:</p>
+            <ul>
+                <li><strong>Spreading Knowledge:</strong> Making Islamic sciences accessible to everyone through trusted scholars and educators.</li>
+                <li><strong>Empowering Values:</strong> Instilling moral and educational values in the youth to safeguard them against intellectual extremism.</li>
+                <li><strong>Protecting the Family:</strong> Providing practical guidance for social and family issues, recognizing the family as the cornerstone of society.</li>
+                <li><strong>Defending Truth:</strong> Clarifying misconceptions about Islam and the Prophet Muhammad (peace be upon him) with wisdom and rational dialogue.</li>
+            </ul>
+
+            <h2>Why Daawah TV?</h2>
+            <p>In a crowded media landscape, Daawah TV stands out as a "Family-Safe" sanctuary. We guarantee clean, ethically sound content free from inappropriate material, making our screen and app the perfect choice for collective family viewing. We believe that media is a trust (Amanah), and we dedicate our resources to serving our faith and community with integrity.</p>
+        </div>
+
+        <div class="footer">
+            &copy; 2025 Daawah TV. <br>
+            <a href="https://daawah.tv">Return to Home</a>
+        </div>
+    </div>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"bf18134237514660afcc5ea4267157f0","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

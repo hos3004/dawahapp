@@ -1,11 +1,10 @@
-// [ ملف معدل: lib/presentation/screens/home/home_screen.dart ]
+// [ تم التعديل ليتوافق مع الـ Lifted State و Caching ]
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import '../../../data/models/program_item.dart';
-import '../../../data/repositories/program_repository.dart';
 
 import '../../bloc/home/home_bloc.dart';
 import '../../bloc/home/home_event.dart';
@@ -18,12 +17,9 @@ import '../categories/categories_screen.dart';
 import 'typed_content_tab.dart';
 import '../blog/blog_list_screen.dart';
 
-// ✅ استيراد الشاشات الجديدة
 import '../tiktok_feed/daawah_tiktok_screen.dart';
-import '../settings/settings_screen.dart';
-import '../search/search_screen.dart';      // <-- استيراد شاشة البحث
-import '../quran/quran_list_screen.dart';  // <-- استيراد شاشة القرآن
-import '../quran/mushaf_selection_screen.dart';  // <-- استيراد شاشة القرآن
+import '../search/search_screen.dart';
+import '../../../features/quran/presentation/pages/quran_view_page.dart';
 
 /// ===== KeepAliveWrapper =====
 class KeepAliveWrapper extends StatefulWidget {
@@ -50,11 +46,9 @@ class _KeepAliveWrapperState extends State<KeepAliveWrapper>
   bool get wantKeepAlive => widget.keepAlive;
 }
 
-/// ===== Logo Header (ثابت في الأعلى) =====
-/// تم التعديل: إضافة زر البحث بجوار زر الإعدادات
+/// ===== Logo Header =====
 class _LogoHeader extends StatelessWidget {
   const _LogoHeader();
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -65,7 +59,6 @@ class _LogoHeader extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // 1. الشعار (في المنتصف)
             Center(
               child: Image.asset(
                 'assets/images/logo.png',
@@ -73,19 +66,15 @@ class _LogoHeader extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
             ),
-
-            // 2. أزرار الإعدادات والبحث (على اليسار)
             Align(
               alignment: Alignment.centerLeft,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // زر الإعدادات
                   IconButton(
                     icon: Icon(Icons.settings_outlined, color: Colors.grey[700], size: 28.0),
                     onPressed: () => Navigator.pushNamed(context, '/settings'),
                   ),
-                  // ✅ زر البحث (تمت إضافته هنا)
                   IconButton(
                     icon: Icon(Icons.search, color: Colors.grey[700], size: 28.0),
                     onPressed: () {
@@ -107,12 +96,10 @@ class _LogoHeader extends StatelessWidget {
 
 /// =====================
 /// HomeSectionContainer
-/// (يحتوي على التبويبات العلوية: الرئيسية، البرامج، إلخ)
 /// =====================
 class HomeSectionContainer extends StatefulWidget {
   final Function(ProgramItem tappedItem) onStaticItemTap;
   final int bottomNavIndex;
-
   const HomeSectionContainer({
     super.key,
     required this.onStaticItemTap,
@@ -125,7 +112,6 @@ class HomeSectionContainer extends StatefulWidget {
 class _HomeSectionContainerState extends State<HomeSectionContainer>
     with TickerProviderStateMixin {
   late TabController _tabController;
-
   final List<Tab> _tabs = const <Tab>[
     Tab(text: 'الرئيسية'),
     Tab(text: 'البرامج'),
@@ -133,7 +119,6 @@ class _HomeSectionContainerState extends State<HomeSectionContainer>
     Tab(text: 'الفيديو'),
     Tab(text: 'المقالات'),
   ];
-
   @override
   void initState() {
     super.initState();
@@ -152,7 +137,7 @@ class _HomeSectionContainerState extends State<HomeSectionContainer>
       length: _tabs.length,
       child: Column(
         children: [
-          const _LogoHeader(), // <-- يحتوي الآن على البحث والإعدادات
+          const _LogoHeader(),
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
@@ -173,21 +158,26 @@ class _HomeSectionContainerState extends State<HomeSectionContainer>
               indicatorColor: Colors.white,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white70,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+              labelStyle: GoogleFonts.tajawal(
+                fontWeight: FontWeight.bold,
+                fontSize: 15, // يمكنك تعديل الحجم حسب الرغبة
+              ),
+              unselectedLabelStyle: GoogleFonts.tajawal(
+                fontWeight: FontWeight.normal,
+                fontSize: 15,
+              ),
             ),
           ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: <Widget>[
-                // 1. الرئيسية
-                BlocProvider(
-                  create: (context) => HomeBloc(
-                    programRepository: RepositoryProvider.of<ProgramRepository>(context),
-                  )..add(FetchHomeContent()),
-                  child: const HomeContentWidget(),
+                // ✅ 1. الرئيسية (تم إزالة BlocProvider المحلي واستخدام KeepAlive)
+                const KeepAliveWrapper(
+                  keepAlive: true,
+                  child: HomeContentWidget(),
                 ),
+
                 // 2. البرامج
                 const KeepAliveWrapper(
                   keepAlive: true,
@@ -219,7 +209,6 @@ class _HomeSectionContainerState extends State<HomeSectionContainer>
 
 /// =====================
 /// HomeContentWidget
-/// (محتوى تبويب الرئيسية - لم يتغير)
 /// =====================
 class HomeContentWidget extends StatelessWidget {
   const HomeContentWidget({super.key});
@@ -241,34 +230,42 @@ class HomeContentWidget extends StatelessWidget {
         if (state is HomeLoadSuccess) {
           final itemCount = state.dynamicSliders.length + (state.bannerItems.isNotEmpty ? 1 : 0);
 
-          return CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.only(top: 0),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                      if (index == 0 && state.bannerItems.isNotEmpty) {
-                        return BannerSlider(items: state.bannerItems);
-                      }
-                      final sliderIndex = state.bannerItems.isNotEmpty ? index - 1 : index;
-                      if (sliderIndex < 0 || sliderIndex >= state.dynamicSliders.length) {
-                        return const SizedBox.shrink();
-                      }
-                      final slider = state.dynamicSliders[sliderIndex];
-                      return HorizontalProgramRow(
-                        title: slider.title,
-                        programs: slider.programs,
-                        rowHeight: 280.0,
-                        cardAspectRatio: 2 / 3,
-                        cardWidth: 150.0,
-                      );
-                    },
-                    childCount: itemCount,
+          // ✅ إضافة ميزة السحب للتحديث (Pull-to-Refresh)
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<HomeBloc>().add(RefreshHomeContent());
+              // انتظار بسيط ليعطي انطباعاً بالاستجابة
+              await Future.delayed(const Duration(seconds: 1));
+            },
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.only(top: 0),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        if (index == 0 && state.bannerItems.isNotEmpty) {
+                          return BannerSlider(items: state.bannerItems);
+                        }
+                        final sliderIndex = state.bannerItems.isNotEmpty ? index - 1 : index;
+                        if (sliderIndex < 0 || sliderIndex >= state.dynamicSliders.length) {
+                          return const SizedBox.shrink();
+                        }
+                        final slider = state.dynamicSliders[sliderIndex];
+                        return HorizontalProgramRow(
+                          title: slider.title,
+                          programs: slider.programs,
+                          rowHeight: 280.0,
+                          cardAspectRatio: 2 / 3,
+                          cardWidth: 150.0,
+                        );
+                      },
+                      childCount: itemCount,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         }
         return const Center(
@@ -281,7 +278,6 @@ class HomeContentWidget extends StatelessWidget {
 
 /// =====================
 /// HomeScreen
-/// (التعديلات الرئيسية هنا: تبديل الأيقونات والشاشات)
 /// =====================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -290,12 +286,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 1; // "الرئيسية" هو الافتراضي
+  int _selectedIndex = 1;
   late List<Widget> _widgetOptions;
 
   final CategoriesScreen _categoriesScreen = const CategoriesScreen();
   late HomeSectionContainer _homeSectionContainer;
-  final GlobalKey<LiveStreamScreenState> _liveStreamKey = GlobalKey<LiveStreamScreenState>();
 
   @override
   void initState() {
@@ -309,44 +304,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _buildWidgetOptions() {
     _widgetOptions = <Widget>[
-      _categoriesScreen, // Index 0
-      _homeSectionContainer, // Index 1
+      _categoriesScreen, // 0
+      _homeSectionContainer, // 1
       LiveStreamScreen(
-        key: _liveStreamKey,
         tabIndex: 2,
         currentIndex: _selectedIndex,
         isInTabView: false,
-      ), // Index 2
+      ), // 2
       DaawahTikTokScreen(
         isScreenActive: _selectedIndex == 3,
-      ), // Index 3
-
-      // ✅ التعديل: وضع شاشة القرآن هنا بدلاً من شاشة البحث
-    const MushafSelectionScreen(), ];
+      ), // 3
+      const QuranViewPage(), // 4
+    ];
   }
 
   void _handleStaticItemTap(ProgramItem tappedItem) {
     if (tappedItem.postType == "live_stream") {
       _onItemTapped(2);
     } else {
-      print("Item tapped, navigation should be handled by the widget itself.");
+      debugPrint("Navigation handled by widget");
     }
   }
 
   void _onItemTapped(int index) {
-    // تم إزالة شرط (index == 4) الخاص بالبحث، لأن البحث أصبح في الأعلى
-
     setState(() {
       _selectedIndex = index;
-
       if (index == 1) {
         _homeSectionContainer = HomeSectionContainer(
           onStaticItemTap: _handleStaticItemTap,
           bottomNavIndex: _selectedIndex,
         );
       }
-
-      // إعادة بناء القائمة لتحديث الحالات (مثل تشغيل/إيقاف الفيديو)
       _buildWidgetOptions();
     });
   }
@@ -374,7 +362,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      // ✅ استخدام ConvexAppBar كما في التصميم الأصلي
       bottomNavigationBar: ConvexAppBar(
         style: TabStyle.reactCircle,
         backgroundColor: Colors.white,
@@ -386,28 +373,27 @@ class _HomeScreenState extends State<HomeScreen> {
           TabItem(
             icon: Icons.category_outlined,
             activeIcon: Icons.category,
-            title: 'تصنيفات', // Index 0
+            title: 'تصنيفات',
           ),
           TabItem(
             icon: Icons.home_outlined,
             activeIcon: Icons.home,
-            title: 'الرئيسية', // Index 1
+            title: 'الرئيسية',
           ),
           TabItem(
             icon: Icons.live_tv_outlined,
             activeIcon: Icons.live_tv,
-            title: 'البث المباشر', // Index 2
+            title: 'البث المباشر',
           ),
           TabItem(
             icon: Icons.video_library_outlined,
             activeIcon: Icons.video_library,
-            title: 'تيك توك', // Index 3
+            title: 'تيك توك',
           ),
-          // ✅ التعديل: تغيير الأيقونة والعنوان إلى "مصحف"
           TabItem(
-            icon: Icons.menu_book_outlined, // أو Icons.book
+            icon: Icons.menu_book_outlined,
             activeIcon: Icons.menu_book,
-            title: 'مصحف', // Index 4
+            title: 'مصحف',
           ),
         ],
         initialActiveIndex: _selectedIndex,

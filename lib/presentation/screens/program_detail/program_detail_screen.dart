@@ -13,7 +13,6 @@ import '../../widgets/episode_list_item.dart';
 import '../../screens/video_player/unified_player_screen.dart';
 import '../../screens/video_player/youtube_player_screen.dart';
 
-
 class ProgramDetailScreen extends StatefulWidget {
   final int programId;
   final String? postType;
@@ -78,7 +77,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
           _isLoadingEpisodes = false;
         });
       }
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -97,7 +95,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
     });
 
     try {
-      final episodes = await _repository.getSeasonEpisodes(widget.programId, season.id);
+      final episodes =
+          await _repository.getSeasonEpisodes(widget.programId, season.id);
       if (!mounted) return;
       setState(() {
         _episodes = episodes.reversed.toList();
@@ -128,7 +127,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
       // 2. تحديد الرابط الصحيح (URL أو Embed)
       String? videoUrl;
       final choice = episodeDetails.episodeChoice;
-      if (choice == 'movie_embed' || choice == 'video_embed' || choice == 'episode_embed') {
+      if (choice == 'movie_embed' ||
+          choice == 'video_embed' ||
+          choice == 'episode_embed') {
         videoUrl = episodeDetails.embedContent;
       } else {
         videoUrl = episodeDetails.urlLink; // الافتراضي
@@ -172,7 +173,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
           ),
         );
       }
-
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -188,7 +188,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
   }
   // ✅ --- نهاية التعديل 3 ---
 
-
   // ✅ --- [التعديل 4] ---
   // تعديل دالة تشغيل الفيلم/الفيديو لتصبح "الموجّه"
   Future<void> _playDirectContent(TvShowDetails details) async {
@@ -203,7 +202,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
       String? videoUrl;
       final choice = details.episodeChoice;
 
-      if (choice == 'movie_embed' || choice == 'video_embed' || choice == 'episode_embed') {
+      if (choice == 'movie_embed' ||
+          choice == 'video_embed' ||
+          choice == 'episode_embed') {
         videoUrl = details.embedContent;
       } else {
         videoUrl = details.urlLink; // الافتراضي
@@ -224,7 +225,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
         }
 
         // إنشاء "قائمة تشغيل مزيفة" تحتوي على الفيلم فقط
-        final fakeEpisode = EpisodeItem(id: details.id, title: details.title, image: details.image);
+        final fakeEpisode = EpisodeItem(
+            id: details.id, title: details.title, image: details.image);
 
         Navigator.push(
           context,
@@ -240,7 +242,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
       } else {
         // --- إنه رابط مباشر (MP4/M3U8) ---
         // إنشاء "قائمة تشغيل مزيفة"
-        final fakeEpisode = EpisodeItem(id: details.id, title: details.title, image: details.image);
+        final fakeEpisode = EpisodeItem(
+            id: details.id, title: details.title, image: details.image);
 
         Navigator.push(
           context,
@@ -268,7 +271,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
   }
   // ✅ --- نهاية التعديل 4 ---
 
-
   // دالة زر التشغيل الكبير (تبقى كما هي - المنطق صحيح)
   Future<void> _onPlayTapped() async {
     if (widget.postType == "movie" || widget.postType == "video") {
@@ -285,7 +287,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
       _playEpisode(_episodes.first, 0);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -316,36 +317,118 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
       return const Center(child: Text("لم يتم العثور على البرنامج."));
     }
 
-    return Stack(
-      children: [
-        _buildHeaderImageWithPlayButton(_details!),
-        DraggableScrollableSheet(
-          initialChildSize: 0.45,
-          minChildSize: 0.45,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-                boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)),
-                ],
-              ),
-              child: _buildInfoPanel(scrollController, _details!),
-            );
-          },
-        ),
-        Positioned(
-          top: 40,
-          left: 16,
-          child: SafeArea(
+    return CustomScrollView(
+      slivers: [
+        // 1. صورة الغلاف العلوية كـ AppBar
+        SliverAppBar(
+          expandedHeight:
+              MediaQuery.of(context).size.height * 0.70, // 70% من الشاشة
+          pinned: true,
+          stretch: true,
+          backgroundColor: Colors.black,
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundColor: Colors.black.withAlpha(128),
+              backgroundColor: Colors.black.withValues(alpha: 0.5),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => Navigator.of(context).pop(),
               ),
+            ),
+          ),
+          flexibleSpace: FlexibleSpaceBar(
+            stretchModes: const [StretchMode.zoomBackground],
+            background: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: _details!.image,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      Container(color: Colors.black12),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.black12,
+                    child: const Icon(Icons.error, color: Colors.black26),
+                  ),
+                ),
+                // تدرج لوني مكثف في الأسفل لضمان قراءة النصوص
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withValues(alpha: 0.9),
+                        Colors.black.withValues(alpha: 0.3),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.4, 1.0],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
+                ),
+                // زر التشغيل الكبير متمركز في النصف السفلي
+                Positioned(
+                  bottom: 30, // مرفوع قليلاً فوق الحواف
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _isStartingPlayback
+                        ? const SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : InkWell(
+                            onTap: _onPlayTapped,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red[600], // لون لافت للانتباه
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withValues(alpha: 0.5),
+                                    blurRadius: 15,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 45,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 2. المحتوى والحلقات
+        SliverToBoxAdapter(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoSection(_details!),
+                if (_details!.seasons != null &&
+                    _details!.seasons!.isNotEmpty) ...[
+                  const Divider(height: 1),
+                  _buildSeasonChips(_details!.seasons!),
+                  _buildEpisodeList(),
+                ],
+                // مسافة إضافية في الأسفل للراحة أثناء التمرير الممتد
+                const SizedBox(height: 80),
+              ],
             ),
           ),
         ),
@@ -360,98 +443,25 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text(error, textAlign: TextAlign.center, style: TextStyle(color: Colors.red[300])),
+            child: Text(error,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red[300])),
           ),
           ElevatedButton(
             onPressed: _fetchProgramDetails, // إعادة المحاولة
-            child: const Text('Retry'),
+            child: const Text('إعادة المحاولة'),
           )
         ],
       ),
     );
   }
 
-  Widget _buildHeaderImageWithPlayButton(TvShowDetails details) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    return SizedBox(
-      height: screenHeight * 0.6, // 60% من الشاشة
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
+  Widget _buildInfoSection(TvShowDetails details) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CachedNetworkImage(
-            imageUrl: details.image,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(color: Colors.black12),
-            errorWidget: (context, url, error) => Container(
-              color: Colors.black12,
-              child: const Icon(Icons.error, color: Colors.black26),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black.withOpacity(0.5), Colors.transparent],
-                begin: Alignment.bottomCenter,
-                end: Alignment.center,
-              ),
-            ),
-          ),
-          Center(
-            child: _isStartingPlayback
-                ? const SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 3,
-              ),
-            )
-                : InkWell(
-              onTap: _onPlayTapped,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.play_arrow,
-                  color: Colors.red[600],
-                  size: 45,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoPanel(ScrollController scrollController, TvShowDetails details) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
-      child: ListView(
-        controller: scrollController,
-        padding: const EdgeInsets.all(20.0),
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,13 +470,14 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
                 child: Text(
                   details.title,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.favorite_border, color: Colors.red[400], size: 28),
+                icon: Icon(Icons.favorite_border,
+                    color: Colors.red[400], size: 28),
                 onPressed: () {},
               ),
             ],
@@ -475,67 +486,70 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
           Text(
             "${details.genre.join(' • ')}  ${(details.seasonsCount ?? 0) > 0 ? '•  ${details.seasonsCount} مواسم' : ''}",
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[800],
-            ),
+                  color: Colors.grey[800],
+                ),
           ),
-          const Divider(height: 5),
-          const SizedBox(height: 5),
+          const SizedBox(height: 16),
           ExpandableDescription(text: details.description),
-          if (details.seasons != null && details.seasons!.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(height: 5),
-                const SizedBox(height: 0),
-                _buildEpisodeList(),
-              ],
-            )
         ],
       ),
     );
   }
 
-  Widget _buildSeasonSelector(List<Season> seasons) {
+  Widget _buildSeasonChips(List<Season> seasons) {
     if (seasons.isEmpty) {
-      return const Text("لا توجد مواسم متاحة.");
+      return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "الموسم:",
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Text(
+              "المواسم",
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<Season>(
-              isExpanded: true,
-              value: _selectedSeason,
-              icon: const Icon(Icons.keyboard_arrow_down),
-              items: seasons.map((season) {
-                return DropdownMenuItem<Season>(
-                  value: season,
-                  child: Text(season.name),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              scrollDirection: Axis.horizontal,
+              itemCount: seasons.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final season = seasons[index];
+                final isSelected = _selectedSeason?.id == season.id;
+                return ActionChip(
+                  backgroundColor: isSelected
+                      ? Theme.of(context).primaryColor
+                      : Colors.grey[200],
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black87,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  ),
+                  label: Text(season.name),
+                  onPressed: () {
+                    if (!isSelected) {
+                      _selectSeason(season);
+                    }
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  side: BorderSide.none,
                 );
-              }).toList(),
-              onChanged: (Season? newSeason) {
-                if (newSeason != null) {
-                  _selectSeason(newSeason);
-                }
               },
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -548,13 +562,17 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
     }
 
     if (_error != null && _episodes.isEmpty) {
-      return Center(child: Text(_error!));
+      return Center(
+          child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Text(_error!),
+      ));
     }
 
     if (_episodes.isEmpty) {
       return const Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 20.0),
+          padding: EdgeInsets.symmetric(vertical: 40.0),
           child: Text("لا توجد حلقات في هذا الموسم."),
         ),
       );
@@ -562,8 +580,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen> {
 
     return ListView.builder(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
+      physics:
+          const NeverScrollableScrollPhysics(), // لأن الصفحة كلها قابلة للتمرير
+      padding: const EdgeInsets.only(top: 8.0),
       itemCount: _episodes.length,
       itemBuilder: (context, index) {
         final episode = _episodes[index];

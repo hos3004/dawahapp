@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../data/models/program_guide_item.dart';
-import '../../../data/models/episode_item.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final int tabIndex;

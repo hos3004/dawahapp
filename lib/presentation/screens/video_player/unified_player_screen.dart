@@ -8,6 +8,8 @@ import '../../../data/models/episode_item.dart';
 import '../../../data/repositories/program_repository.dart';
 import '../../../data/playback_position_manager.dart';
 import '../../widgets/episode_list_item.dart';
+import '../../../core/utils/media_control.dart';
+import 'package:flutter/services.dart';
 
 /// شاشة مشغل فيديو موحدة
 /// تستخدم better_player_plus لتشغيل (MP4, HLS, YouTube)
@@ -27,7 +29,8 @@ class UnifiedPlayerScreen extends StatefulWidget {
   State<UnifiedPlayerScreen> createState() => _UnifiedPlayerScreenState();
 }
 
-class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
+class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen>
+    with WidgetsBindingObserver {
   BetterPlayerController? _betterPlayerController;
   final GlobalKey _betterPlayerKey = GlobalKey();
 
@@ -42,8 +45,31 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     // تفعيل منع قفل الشاشة عند بدء التشغيل
     WakelockPlus.enable();
 
+    // الاستماع لحالة التطبيق (مثلاً عند الخروج للشاشة الرئيسية)
+    WidgetsBinding.instance.addObserver(this);
+
+    // الاستماع لإشارة الإيقاف العامة (عند التنقل بين التبويبات السفلية)
+    MediaControl.pauseNotifier.addListener(_pausePlayback);
+
     _currentIndex = widget.startIndex;
     _initializeEpisode(_currentIndex);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // إيقاف الفيديو عند الخروج من التطبيق للـ Background
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _pausePlayback();
+    }
+  }
+
+  void _pausePlayback() {
+    if (_betterPlayerController != null &&
+        _betterPlayerController!.isPlaying() == true) {
+      _betterPlayerController!.pause();
+    }
   }
 
   /// دالة تهيئة الحلقة (الأهم)
@@ -71,12 +97,15 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
 
     try {
       // أ. جلب رابط الفيديو من الـ API
-      final episodeDetails = await widget.repository.getEpisodeDetails(_currentEpisode!.id);
+      final episodeDetails =
+          await widget.repository.getEpisodeDetails(_currentEpisode!.id);
 
       // تحديد الرابط الصحيح
       String? videoUrl;
       final choice = episodeDetails.episodeChoice;
-      if (choice == 'movie_embed' || choice == 'video_embed' || choice == 'episode_embed') {
+      if (choice == 'movie_embed' ||
+          choice == 'video_embed' ||
+          choice == 'episode_embed') {
         videoUrl = episodeDetails.embedContent;
       } else {
         videoUrl = episodeDetails.urlLink; // الافتراضي
@@ -88,7 +117,8 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       }
 
       // ب. جلب الموضع المحفوظ
-      final startAt = await PlaybackPositionManager.getPosition(_currentEpisode!.id);
+      final startAt =
+          await PlaybackPositionManager.getPosition(_currentEpisode!.id);
 
       // ج. تهيئة BetterPlayerDataSource
       BetterPlayerDataSource dataSource = BetterPlayerDataSource(
@@ -105,10 +135,16 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           aspectRatio: 16 / 9,
           fit: BoxFit.contain,
           allowedScreenSleep: false,
+          deviceOrientationsAfterFullScreen: const [
+            DeviceOrientation.portraitUp,
+          ],
           controlsConfiguration: const BetterPlayerControlsConfiguration(
             enableQualities: true,
             enableSubtitles: false,
             enablePlaybackSpeed: true,
+            playerTheme: BetterPlayerTheme.material,
+            controlBarColor: Colors.black54,
+            iconsColor: Colors.white,
           ),
         ),
         betterPlayerDataSource: dataSource,
@@ -141,7 +177,8 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
   Future<void> _playNextEpisode() async {
     // مسح الموضع المحفوظ للحلقة التي انتهت
     if (_currentEpisode != null) {
-      await PlaybackPositionManager.savePosition(_currentEpisode!.id, Duration.zero);
+      await PlaybackPositionManager.savePosition(
+          _currentEpisode!.id, Duration.zero);
     }
 
     if (_currentIndex + 1 < widget.episodes.length) {
@@ -157,14 +194,14 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
 
   /// حفظ الموضع
   Future<void> _savePosition() async {
-
     // ✅ --- [التصحيح 1] ---
     // إضافة التحقق من أن duration ليست null قبل المقارنة
     final controller = _betterPlayerController?.videoPlayerController;
     if (_currentEpisode != null &&
         controller != null &&
         controller.value.duration != null && // <-- 1. التحقق من null
-        controller.value.duration! > Duration.zero) { // <-- 2. استخدام !
+        controller.value.duration! > Duration.zero) {
+      // <-- 2. استخدام !
 
       Duration position = controller.value.position;
 
@@ -181,6 +218,14 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     // إلغاء تفعيل منع قفل الشاشة عند الخروج
     WakelockPlus.disable();
 
+    WidgetsBinding.instance.removeObserver(this);
+    MediaControl.pauseNotifier.removeListener(_pausePlayback);
+
+    // إجبار الجهاز على الوضع العمودي كإجراء احترازي إضافي
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+
     _betterPlayerController?.removeEventsListener(_onPlayerEvent);
     _betterPlayerController?.dispose();
     super.dispose();
@@ -191,48 +236,66 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     // استخدام PopScope
     return PopScope(
       canPop: false, // نمنع الخروج التلقائي لنتمكن من حفظ الموضع
-      onPopInvoked: (bool didPop) {
-        if (didPop) {
-          return; // إذا تم الخروج بالفعل
-        }
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
 
         // إصلاح خطأ "BuildContext across async gaps"
         final navigator = Navigator.of(context);
         _savePosition().then((_) {
           if (mounted) {
-            navigator.pop();
+            navigator.pop(result);
           }
         });
       },
       child: Scaffold(
         backgroundColor: Colors.grey[100], // خلفية فاتحة
-        body: Stack(
-          children: [
-            // --- 1. المشغل (في الأعلى) ---
-            _buildPlayerHeader(),
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: Column(
+            children: [
+              // --- 1. المشغل بنسبة 16:9 القياسية المريحة للعين ---
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  children: [
+                    Container(
+                      color: Colors.black, // خلفية سوداء للمشغل
+                      child: _buildPlayerWidget(), // بناء المشغل الفعلي
+                    ),
+                    // زر الرجوع الشفاف المتراكب
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.black.withValues(alpha: 0.5),
+                        child: IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () {
+                            final navigator = Navigator.of(context);
+                            _savePosition().then((_) {
+                              if (mounted) {
+                                navigator.pop();
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-            // --- 2. لوحة المعلومات القابلة للسحب ---
-            DraggableScrollableSheet(
-              initialChildSize: 0.55, // ابدأ من 55% من الشاشة
-              minChildSize: 0.55,
-              maxChildSize: 0.9, // اسمح بالسحب حتى 90%
-              builder: (context, scrollController) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5)),
-                    ],
-                  ),
-                  child: _buildInfoPanel(scrollController),
-                );
-              },
-            ),
-
-            // --- 3. زر الرجوع ---
-            _buildBackButton(),
-          ],
+              // --- 2. باقى الشاشة (معلومات وقائمة حلقات) بالتمرير الطبيعي ---
+              Expanded(
+                child: Container(
+                  color: Colors.white,
+                  child: _buildInfoPanel(),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -240,160 +303,109 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
 
   // --- ويدجتس بناء الواجهة ---
 
-  // ويدجت لبناء الجزء العلوي (المشغل)
-  Widget _buildPlayerHeader() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    // جعل المشغل يأخذ 45% من ارتفاع الشاشة
-    return Container(
-      height: screenHeight * 0.45,
-      width: double.infinity,
-      color: Colors.black, // خلفية سوداء للمشغل
-      child: _buildPlayerWidget(), // بناء المشغل الفعلي
-    );
-  }
-
   // ويدجت بناء المشغل (أو التحميل أو الخطأ)
   Widget _buildPlayerWidget() {
     if (_isLoading || _betterPlayerController == null) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.white));
     }
     if (_error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+          child: Text(_error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70)),
         ),
       );
     }
-    // إذا نجح، اعرض المشغل
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: BetterPlayer(
-        key: _betterPlayerKey,
-        controller: _betterPlayerController!,
-      ),
-    );
-  }
-
-  // ويدجت بناء زر الرجوع
-  Widget _buildBackButton() {
-    return Positioned(
-      top: 40,
-      left: 16,
-      child: SafeArea(
-        child: CircleAvatar(
-          // استخدام .withAlpha(128) بدلاً من .withOpacity(0.5)
-          backgroundColor: Colors.black.withAlpha(128),
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () {
-              // إصلاح خطأ "BuildContext across async gaps"
-              final navigator = Navigator.of(context);
-              _savePosition().then((_) {
-                if (mounted) {
-                  navigator.pop();
-                }
-              });
-            },
-          ),
-        ),
-      ),
+    // إذا نجح، اعرض المشغل (Aspect Ratio مُعالج في الـ Parent)
+    return BetterPlayer(
+      key: _betterPlayerKey,
+      controller: _betterPlayerController!,
     );
   }
 
   // ويدجت بناء لوحة المعلومات (الحلقة الحالية + الحلقات التالية)
-  Widget _buildInfoPanel(ScrollController scrollController) {
+  Widget _buildInfoPanel() {
     // حساب عدد الحلقات المتبقية
-    final int remainingEpisodesCount = widget.episodes.length - _currentIndex - 1;
+    final int remainingEpisodesCount =
+        widget.episodes.length - _currentIndex - 1;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
-      child: ListView(
-        controller: scrollController,
-        padding: const EdgeInsets.all(20.0),
-        children: [
-          // 1. مقبض السحب
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 2. عنوان الحلقة الحالية
-          Text(
-            _currentEpisode?.title ?? "تحميل العنوان...",
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // 3. مدة الحلقة
-          if (_currentEpisode?.runTime != null && _currentEpisode!.runTime!.isNotEmpty)
-            Row(
-              children: [
-                Icon(Icons.timer_outlined, color: Colors.grey[600], size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  _currentEpisode!.runTime!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-
-          const Divider(height: 32),
-
-          // 4. عنوان "الحلقات التالية" (فقط إذا كانت القائمة تحتوي على أكثر من عنصر)
-          if (widget.episodes.length > 1)
-            Text(
-              "الحلقات التالية:",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+    return ListView(
+      padding: const EdgeInsets.all(20.0),
+      children: [
+        // 1. عنوان الحلقة الحالية
+        Text(
+          _currentEpisode?.title ?? "تحميل العنوان...",
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
-            ),
-          if (widget.episodes.length > 1)
-            const SizedBox(height: 8),
+        ),
+        const SizedBox(height: 8),
 
-          // 5. بناء قائمة الحلقات التالية
-          if (remainingEpisodesCount <= 0 && widget.episodes.length > 1)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
-              child: Center(child: Text("أنت تشاهد الحلقة الأخيرة في الموسم.")),
-            )
-          else if (widget.episodes.length > 1)
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: remainingEpisodesCount,
-              itemBuilder: (context, index) {
-                // حساب الاندكس الصحيح من القائمة الأصلية
-                final int episodeIndex = _currentIndex + 1 + index;
-                final episode = widget.episodes[episodeIndex];
+        // 2. مدة الحلقة
+        if (_currentEpisode?.runTime != null &&
+            _currentEpisode!.runTime!.isNotEmpty)
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, color: Colors.grey[600], size: 18),
+              const SizedBox(width: 8),
+              Text(
+                _currentEpisode!.runTime!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[800],
+                    ),
+              ),
+            ],
+          ),
 
-                return EpisodeListItem(
-                  episode: episode,
-                  onTap: () {
-                    // تشغيل الحلقة التي تم الضغط عليها
-                    _initializeEpisode(episodeIndex);
-                  },
-                );
-              },
-            )
-          else
+        const Divider(height: 32),
+
+        // 3. عنوان "الحلقات التالية" (فقط إذا كانت القائمة تحتوي على أكثر من عنصر)
+        if (widget.episodes.length > 1)
+          Text(
+            "الحلقات التالية:",
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+          ),
+        if (widget.episodes.length > 1) const SizedBox(height: 16),
+
+        // 4. بناء قائمة الحلقات التالية
+        if (remainingEpisodesCount <= 0 && widget.episodes.length > 1)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20.0),
+            child: Center(
+                child: Text("أنت تشاهد الحلقة الأخيرة في الموسم.",
+                    style: TextStyle(color: Colors.grey, fontSize: 16))),
+          )
+        else if (widget.episodes.length > 1)
+          ListView.builder(
+            shrinkWrap: true,
+            physics:
+                const NeverScrollableScrollPhysics(), // التمرير سيكون للـ ListView الأساسي الأعلى
+            itemCount: remainingEpisodesCount,
+            itemBuilder: (context, index) {
+              // حساب الاندكس الصحيح من القائمة الأصلية
+              final int episodeIndex = _currentIndex + 1 + index;
+              final episode = widget.episodes[episodeIndex];
+
+              return EpisodeListItem(
+                episode: episode,
+                onTap: () {
+                  // تشغيل الحلقة التي تم الضغط عليها
+                  _initializeEpisode(episodeIndex);
+                },
+              );
+            },
+          )
+        else
           // (لا تعرض شيئاً إذا كان فيلماً واحداً)
-            const SizedBox.shrink(),
-        ],
-      ),
+          const SizedBox.shrink(),
+      ],
     );
   }
 }

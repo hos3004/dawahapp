@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:stream_transform/stream_transform.dart';
-import '../../../data/models/program_item.dart';
 import '../../../data/repositories/program_repository.dart';
 import 'search_event.dart';
 import 'search_state.dart';

@@ -1,9 +1,9 @@
-// [ ملف جديد: lib/presentation/screens/webview/webview_screen.dart ]
+// lib/presentation/screens/webview/webview_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-/// شاشة لعرض صفحة ويب داخل التطبيق
+/// شاشة لعرض صفحة ويب داخل التطبيق (تدعم الروابط الخارجية والملفات المحلية)
 class WebViewScreen extends StatefulWidget {
   final String title;
   final String url;
@@ -27,7 +27,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
 
-    // تهيئة المتحكم
+    // 1. إعداد المتحكم الأساسي
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
@@ -49,12 +49,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
             });
           },
           onWebResourceError: (WebResourceError error) {
-            // يمكنك إظهار رسالة خطأ هنا
-            print('Page load error: ${error.description}');
+            debugPrint('Page load error: ${error.description}');
           },
         ),
-      )
-      ..loadRequest(Uri.parse(widget.url)); // تحميل الرابط
+      );
+
+    // 2. منطق تحميل المحتوى (التعديل الجديد)
+    _loadContent();
+  }
+
+  /// دالة لتحديد نوع التحميل (إنترنت أو ملف محلي)
+  void _loadContent() {
+    if (widget.url.startsWith('http') || widget.url.startsWith('https')) {
+      // تحميل من الإنترنت
+      _controller.loadRequest(Uri.parse(widget.url));
+    } else {
+      // تحميل من ملفات التطبيق (Assets)
+      // مثال: assets/web/privacy.html
+      _controller.loadFlutterAsset(widget.url);
+    }
   }
 
   @override

@@ -1,0 +1,2274 @@
+﻿
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\data\datasources\quran_local_datasource.dart ==== */
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import '../../../../core/utils/assets_manager.dart';
+import '../models/ayah_coordinates_model.dart';
+
+abstract class QuranLocalDataSource {
+  Future<List<AyahCoordinatesModel>> getCoordinates(int pageNumber, String mushafType);
+}
+
+class QuranLocalDataSourceImpl implements QuranLocalDataSource {
+  @override
+  Future<List<AyahCoordinatesModel>> getCoordinates(int pageNumber, String mushafType) async {
+    try {
+      // استخدام AssetsManager لجلب المسار الصحيح
+      final path = AssetsManager.getCoordsJsonPath(
+        mushafType: mushafType,
+        pageNumber: pageNumber,
+      );
+
+      // قراءة الملف
+      final String response = await rootBundle.loadString(path);
+      final List<dynamic> data = json.decode(response);
+
+      return data.map((e) => AyahCoordinatesModel.fromJson(e)).toList();
+    } catch (e) {
+      // في حال لم نجد الملف (مثل صفحات الفواصل أو خطأ في الاسم) نعيد قائمة فارغة
+      print("QuranLocalDataSource Error: $e");
+      return [];
+    }
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\data\datasources\quran_local_datasource.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\data\models\ayah_coordinates_model.dart ==== */
+import '../../domain/entities/ayah_coordinates.dart';
+
+class AyahCoordinatesModel extends AyahCoordinates {
+  const AyahCoordinatesModel({
+    required super.ayahNumber,
+    required super.pageNumber,
+    required super.polygonData,
+  });
+
+  factory AyahCoordinatesModel.fromJson(Map<String, dynamic> json) {
+    return AyahCoordinatesModel(
+      ayahNumber: json['ayahNumber'] ?? 0,
+      pageNumber: json['page_number'] ?? 0,
+      // تأكدنا من اسم الحقل في ملف 001.json المرفق وهو "polygon"
+      polygonData: json['polygon'] ?? "",
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\data\models\ayah_coordinates_model.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\data\models\reciter_model.dart ==== */
+class ReciterModel {
+  final int id;
+  final String nameArabic;
+  final String slug;
+  final String sourceUrl;
+  // 1️⃣ الحقول الجديدة المضافة لتعريف جودة وتكوين الملفات
+  final String bitRate;
+  final String fileStructure;
+
+  ReciterModel({
+    required this.id,
+    required this.nameArabic,
+    required this.slug,
+    required this.sourceUrl,
+    required this.bitRate,
+    required this.fileStructure,
+  });
+
+  // 2️⃣ Getter لسهولة العرض في الـ UI (مثل: 64kbps • Ayah)
+  String get style => '$bitRate • $fileStructure';
+
+  // 3️⃣ تحديث fromJson للتعامل مع البيانات الجديدة ومعالجة الرابط
+  factory ReciterModel.fromJson(Map<String, dynamic> json) {
+    final rawSource = json['source_url'] as String? ?? '';
+    
+    // التأكد من إزالة / في نهاية الرابط لتوحيد المعالجة لاحقاً
+    final normalizedSource = rawSource.endsWith('/')
+        ? rawSource.substring(0, rawSource.length - 1)
+        : rawSource;
+
+    return ReciterModel(
+      id: json['id'] as int,
+      nameArabic: json['name_arabic'] as String,
+      slug: json['slug'] as String,
+      sourceUrl: normalizedSource,
+      // التعامل الآمن مع الحقول الجديدة في حال كانت null
+      bitRate: (json['bit_rate'] as String?) ?? '',
+      fileStructure: (json['file_structure'] as String?) ?? '',
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\data\models\reciter_model.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\data\repositories\quran_repository_impl.dart ==== */
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import '../../domain/entities/ayah_coordinates.dart';
+import '../../domain/repositories/quran_repository.dart';
+import '../datasources/quran_local_datasource.dart';
+import '../models/reciter_model.dart'; // استيراد النموذج الجديد
+
+class QuranRepositoryImpl implements QuranRepository {
+  final QuranLocalDataSource localDataSource;
+
+  QuranRepositoryImpl({required this.localDataSource});
+
+  @override
+  Future<List<AyahCoordinates>> getPageCoordinates({
+    required int pageNumber,
+    required String mushafType,
+  }) async {
+    return await localDataSource.getCoordinates(pageNumber, mushafType);
+  }
+  
+  // ✅ دالة لجلب القراء (تمت إضافة @override لتطابق الواجهة)
+  @override
+  Future<List<ReciterModel>> getReciters() async {
+    try {
+      final String response = await rootBundle.loadString('assets/json/quran_data/reciters_list.json');
+      final List<dynamic> data = json.decode(response);
+      return data.map((e) => ReciterModel.fromJson(e)).toList();
+    } catch (e) {
+      print("Error loading reciters: $e");
+      return [];
+    }
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\data\repositories\quran_repository_impl.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\domain\entities\ayah_coordinates.dart ==== */
+import 'package:equatable/equatable.dart';
+
+class AyahCoordinates extends Equatable {
+  final int ayahNumber;
+  final int pageNumber;
+  final String polygonData; // سلسلة نصية تحتوي النقاط: "x,y x,y ..."
+
+  const AyahCoordinates({
+    required this.ayahNumber,
+    required this.pageNumber,
+    required this.polygonData,
+  });
+
+  @override
+  List<Object?> get props => [ayahNumber, pageNumber, polygonData];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\domain\entities\ayah_coordinates.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\domain\repositories\quran_repository.dart ==== */
+import '../entities/ayah_coordinates.dart';
+import '../../data/models/reciter_model.dart';          // ✅ نوع ReciterModel
+
+abstract class QuranRepository {
+  /// جلب إحداثيات آيات صفحة معينة بناءً على نوع المصحف
+  Future<List<AyahCoordinates>> getPageCoordinates({
+    required int pageNumber,
+    required String mushafType, // 'hafs', 'warsh', etc.
+  });
+
+  /// جلب قائمة القرّاء المتاحين للصوتيات
+  Future<List<ReciterModel>> getReciters();
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\domain\repositories\quran_repository.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\domain\usecases\get_page_coordinates_usecase.dart ==== */
+import '../entities/ayah_coordinates.dart';
+import '../repositories/quran_repository.dart';
+
+class GetPageCoordinatesUseCase {
+  final QuranRepository repository;
+
+  GetPageCoordinatesUseCase(this.repository);
+
+  Future<List<AyahCoordinates>> call({
+    required int pageNumber,
+    required String mushafType,
+  }) async {
+    return await repository.getPageCoordinates(
+      pageNumber: pageNumber,
+      mushafType: mushafType,
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\domain\usecases\get_page_coordinates_usecase.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_bloc.dart ==== */
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../../core/services/audio_service.dart';
+import '../../../domain/repositories/quran_repository.dart';
+import 'quran_audio_event.dart';
+import 'quran_audio_state.dart';
+
+class QuranAudioBloc extends Bloc<QuranAudioEvent, QuranAudioState> {
+  final AudioService _audioService;
+  final QuranRepository _quranRepository;
+
+  QuranAudioBloc(this._audioService, this._quranRepository) : super(const QuranAudioState()) {
+    
+    // 1. معالج تحميل القراء من الـ Repository
+    on<LoadRecitersEvent>(_onLoadReciters);
+
+    // 2. معالج تغيير القارئ (من القائمة أو الشيت)
+    on<ChangeReciterEvent>(_onChangeReciter);
+
+    // 3. معالج تشغيل المدى (للحفظ والتكرار)
+    on<PlayAudioRangeEvent>(_onPlayAudioRange);
+
+    // 4. معالجات التحكم في الصوت (بسيطة ومباشرة)
+    on<PauseAudioEvent>((event, emit) => _audioService.pause());
+    on<ResumeAudioEvent>((event, emit) => _audioService.resume());
+    on<StopAudioEvent>((event, emit) => _audioService.stop());
+
+    // الاستماع لتغيرات مشغل الصوت (لتحديث الـ UI لاحقاً إذا لزم الأمر)
+    _audioService.playerStateStream.listen((playerState) {
+       // يمكن إضافة منطق هنا لتغيير الحالة بناءً على playerState
+       // مثلاً: عند انتهاء التلاوة نغير الحالة إلى stopped
+    });
+  }
+
+  // ✅ منطق تحميل القراء النظيف
+  Future<void> _onLoadReciters(LoadRecitersEvent event, Emitter<QuranAudioState> emit) async {
+    try {
+      // جلب القراء من الـ Repository مباشرة (بدون rootBundle هنا)
+      final reciters = await _quranRepository.getReciters();
+      
+      emit(state.copyWith(
+        reciters: reciters,
+        // اختيار أول قارئ تلقائياً إذا لم يكن هناك قارئ مختار
+        selectedReciter: state.selectedReciter ?? 
+            (reciters.isNotEmpty ? reciters.first : null),
+      ));
+    } catch (e) {
+      print("Error loading reciters: $e");
+      // يفضل تخزين الخطأ في الحالة لعرضه للمستخدم
+      emit(state.copyWith(errorMessage: "فشل تحميل قائمة القراء: $e"));
+    }
+  }
+
+  // ✅ منطق تغيير القارئ وتحديث الحالة
+  void _onChangeReciter(ChangeReciterEvent event, Emitter<QuranAudioState> emit) {
+    emit(state.copyWith(selectedReciter: event.reciter));
+  }
+
+  // ✅ منطق تشغيل المدى (الآيات) المحدّث
+  Future<void> _onPlayAudioRange(PlayAudioRangeEvent event, Emitter<QuranAudioState> emit) async {
+    // 1. التحقق من وجود قارئ مختار
+    if (state.selectedReciter == null) {
+      emit(state.copyWith(
+        status: AudioStatus.error, 
+        errorMessage: "يرجى اختيار قارئ أولاً"
+      ));
+      return;
+    }
+    
+    emit(state.copyWith(status: AudioStatus.loading, errorMessage: null));
+
+    try {
+      // 2. إيقاف أي تشغيل سابق لضمان عدم تداخل الأصوات
+      await _audioService.stop();
+
+      // 3. البدء في التشغيل باستخدام AudioService
+      await _audioService.playRange(
+        surahNumber: event.surahNumber,
+        startAyah: event.startAyah,
+        endAyah: event.endAyah,
+        baseUrl: state.selectedReciter!.sourceUrl, // استخدام رابط القارئ المختار
+        repeatAyah: event.repeatCount, // تكرار الفقرة كما جاء من MemorizationSheet
+      );
+
+      emit(state.copyWith(status: AudioStatus.playing));
+    } catch (e) {
+      emit(state.copyWith(status: AudioStatus.error, errorMessage: e.toString()));
+    }
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_bloc.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_event.dart ==== */
+import 'package:equatable/equatable.dart';
+import '../../../data/models/reciter_model.dart';
+
+abstract class QuranAudioEvent extends Equatable {
+  const QuranAudioEvent();
+  @override
+  List<Object> get props => [];
+}
+
+// ✅ الحدث المفقود: تحميل قائمة القراء
+class LoadRecitersEvent extends QuranAudioEvent {}
+
+// ✅ الحدث المفقود: تغيير القارئ
+class ChangeReciterEvent extends QuranAudioEvent {
+  final ReciterModel reciter;
+  const ChangeReciterEvent(this.reciter);
+  @override
+  List<Object> get props => [reciter];
+}
+
+// تعديل حدث التشغيل: حذفنا reciterBaseUrl لأنه سيأتي من الـ State
+class PlayAudioRangeEvent extends QuranAudioEvent {
+  final int surahNumber;
+  final int startAyah;
+  final int endAyah;
+  final int repeatCount;
+  // final String reciterBaseUrl; // ❌ تم الحذف
+
+  const PlayAudioRangeEvent({
+    required this.surahNumber,
+    required this.startAyah,
+    required this.endAyah,
+    this.repeatCount = 1,
+    // required this.reciterBaseUrl, // ❌ تم الحذف
+  });
+
+  @override
+  List<Object> get props => [surahNumber, startAyah, endAyah, repeatCount];
+}
+
+class PauseAudioEvent extends QuranAudioEvent {}
+class ResumeAudioEvent extends QuranAudioEvent {}
+class StopAudioEvent extends QuranAudioEvent {}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_event.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_state.dart ==== */
+import 'package:equatable/equatable.dart';
+import '../../../data/models/reciter_model.dart';
+
+enum AudioStatus { initial, loading, playing, paused, stopped, error }
+
+class QuranAudioState extends Equatable {
+  final AudioStatus status;
+  final String? errorMessage;
+  final int currentAyahPlaying;
+  
+  // ✅ إضافة القراء
+  final List<ReciterModel> reciters;
+  final ReciterModel? selectedReciter;
+
+  const QuranAudioState({
+    this.status = AudioStatus.initial,
+    this.errorMessage,
+    this.currentAyahPlaying = 0,
+    this.reciters = const [],
+    this.selectedReciter,
+  });
+
+  QuranAudioState copyWith({
+    AudioStatus? status,
+    String? errorMessage,
+    int? currentAyahPlaying,
+    List<ReciterModel>? reciters,
+    ReciterModel? selectedReciter,
+  }) {
+    return QuranAudioState(
+      status: status ?? this.status,
+      errorMessage: errorMessage,
+      currentAyahPlaying: currentAyahPlaying ?? this.currentAyahPlaying,
+      reciters: reciters ?? this.reciters,
+      selectedReciter: selectedReciter ?? this.selectedReciter,
+    );
+  }
+
+  @override
+  List<Object?> get props => [status, errorMessage, currentAyahPlaying, reciters, selectedReciter];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\audio\quran_audio_state.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_bloc.dart ==== */
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'quran_navigation_event.dart';
+import 'quran_navigation_state.dart';
+
+class QuranNavigationBloc extends Bloc<QuranNavigationEvent, QuranNavigationState> {
+  // ثوابت حدود الصفحات (مصحف المدينة)
+  static const int _minPage = 1;
+  static const int _maxMadinaPages = 604; 
+
+  QuranNavigationBloc() : super(const QuranNavigationState()) {
+    
+    on<ChangePageEvent>((event, emit) {
+      // ✅ ضمان أن رقم الصفحة دائماً بين 1 و 604
+      final int safePage = event.pageNumber.clamp(_minPage, _maxMadinaPages);
+      emit(state.copyWith(currentPage: safePage));
+    });
+
+    on<ChangeMushafTypeEvent>((event, emit) {
+      emit(state.copyWith(mushafType: event.mushafType));
+    });
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_bloc.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_event.dart ==== */
+import 'package:equatable/equatable.dart';
+
+abstract class QuranNavigationEvent extends Equatable {
+  const QuranNavigationEvent();
+  @override
+  List<Object> get props => [];
+}
+
+class ChangePageEvent extends QuranNavigationEvent {
+  final int pageNumber;
+  const ChangePageEvent(this.pageNumber);
+  @override
+  List<Object> get props => [pageNumber];
+}
+
+class ChangeMushafTypeEvent extends QuranNavigationEvent {
+  final String mushafType; // 'hafs', 'warsh', etc.
+  const ChangeMushafTypeEvent(this.mushafType);
+  @override
+  List<Object> get props => [mushafType];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_event.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_state.dart ==== */
+import 'package:equatable/equatable.dart';
+
+class QuranNavigationState extends Equatable {
+  final int currentPage;
+  final String mushafType;
+
+  const QuranNavigationState({
+    this.currentPage = 1,
+    this.mushafType = 'hafs', // القيمة الافتراضية
+  });
+
+  QuranNavigationState copyWith({
+    int? currentPage,
+    String? mushafType,
+  }) {
+    return QuranNavigationState(
+      currentPage: currentPage ?? this.currentPage,
+      mushafType: mushafType ?? this.mushafType,
+    );
+  }
+
+  @override
+  List<Object> get props => [currentPage, mushafType];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\navigation\quran_navigation_state.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_bloc.dart ==== */
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../domain/usecases/get_page_coordinates_usecase.dart';
+import 'quran_overlay_event.dart';
+import 'quran_overlay_state.dart';
+
+class QuranOverlayBloc extends Bloc<QuranOverlayEvent, QuranOverlayState> {
+  final GetPageCoordinatesUseCase _getPageCoordinatesUseCase;
+
+  QuranOverlayBloc(this._getPageCoordinatesUseCase) : super(const QuranOverlayState()) {
+    
+    on<HighlightAyahEvent>((event, emit) async {
+      // 1. جلب إحداثيات الصفحة كاملة
+      final allCoordinates = await _getPageCoordinatesUseCase(
+        pageNumber: event.pageNumber,
+        mushafType: event.mushafType,
+      );
+
+      // 2. البحث عن الآية المطلوبة فقط
+      // ملاحظة: الآية قد يكون لها أكثر من إحداثي (إذا كانت مقسومة على سطرين)
+      final targetHighlights = allCoordinates
+          .where((element) => element.ayahNumber == event.ayahNumber)
+          .toList();
+
+      // 3. إصدار حالة جديدة للرسم
+      emit(QuranOverlayState(highlights: targetHighlights));
+    });
+
+    on<ClearHighlightEvent>((event, emit) {
+      emit(const QuranOverlayState(highlights: []));
+    });
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_bloc.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_event.dart ==== */
+import 'package:equatable/equatable.dart';
+
+abstract class QuranOverlayEvent extends Equatable {
+  @override
+  List<Object> get props => [];
+}
+
+class HighlightAyahEvent extends QuranOverlayEvent {
+  final int ayahNumber;
+  final int pageNumber;
+  final String mushafType;
+
+  HighlightAyahEvent({
+    required this.ayahNumber,
+    required this.pageNumber,
+    required this.mushafType,
+  });
+  
+  @override
+  List<Object> get props => [ayahNumber, pageNumber, mushafType];
+}
+
+class ClearHighlightEvent extends QuranOverlayEvent {}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_event.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_state.dart ==== */
+import 'package:equatable/equatable.dart';
+import '../../../domain/entities/ayah_coordinates.dart';
+
+class QuranOverlayState extends Equatable {
+  final List<AyahCoordinates> highlights; // الإحداثيات التي سيتم رسمها
+
+  const QuranOverlayState({this.highlights = const []});
+
+  @override
+  List<Object> get props => [highlights];
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\bloc\overlay\quran_overlay_state.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\pages\quran_view_page.dart ==== */
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../../core/services/service_locator.dart';
+import '../bloc/navigation/quran_navigation_bloc.dart';
+import '../bloc/navigation/quran_navigation_event.dart';
+import '../bloc/navigation/quran_navigation_state.dart';
+import '../bloc/audio/quran_audio_bloc.dart';
+import '../bloc/audio/quran_audio_event.dart';
+import '../bloc/audio/quran_audio_state.dart';
+import '../bloc/overlay/quran_overlay_bloc.dart';
+import '../bloc/overlay/quran_overlay_event.dart';
+import '../bloc/overlay/quran_overlay_state.dart';
+import '../widgets/quran_page_image.dart';
+import '../widgets/highlight_overlay.dart';
+import '../widgets/memorization_sheet.dart';
+// ✅ استيراد الودجات الجديدة
+import '../widgets/quran_actions_bar.dart';
+import '../widgets/surah_index_sheet.dart';
+import '../widgets/juz_index_sheet.dart';
+import '../widgets/pages_index_sheet.dart';
+
+class QuranViewPage extends StatelessWidget {
+  const QuranViewPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (context) => getIt<QuranNavigationBloc>()),
+        // تحميل القراء فور فتح الصفحة
+        BlocProvider(create: (context) => getIt<QuranAudioBloc>()..add(LoadRecitersEvent())),
+        BlocProvider(create: (context) => getIt<QuranOverlayBloc>()),
+      ],
+      child: const _QuranViewBody(),
+    );
+  }
+}
+
+class _QuranViewBody extends StatelessWidget {
+  const _QuranViewBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF8E1), // نفس لون خلفية المصحف لتوحيد الشكل
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 1. المنطقة العلوية (المصحف) - تأخذ كل المساحة المتبقية
+            Expanded(
+              child: BlocBuilder<QuranNavigationBloc, QuranNavigationState>(
+                builder: (context, navState) {
+                  return PageView.builder(
+                    itemCount: 604,
+                    reverse: true,
+                    controller: PageController(initialPage: navState.currentPage - 1),
+                    onPageChanged: (index) {
+                      navBloc.add(ChangePageEvent(index + 1));
+                      context.read<QuranOverlayBloc>().add(ClearHighlightEvent());
+                    },
+                    itemBuilder: (context, index) {
+                      final pageNum = index + 1;
+                      // InteractiveViewer يسمح للمستخدم بتكبير الصفحة (Zoom)
+                      return InteractiveViewer(
+                        child: Center(
+                          // إزالة AspectRatio الثابت لملء المساحة المتاحة بذكاء
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // الصورة
+                              QuranPageImage(
+                                pageNumber: pageNum,
+                                mushafType: navState.mushafType,
+                              ),
+                              // التظليل
+                              if (pageNum == navState.currentPage)
+                                BlocBuilder<QuranOverlayBloc, QuranOverlayState>(
+                                  builder: (context, overlayState) {
+                                    return HighlightOverlay(
+                                      highlights: overlayState.highlights,
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+
+            // 2. شريط أزرار المصحف (القارئ + الحفظ + الفهارس)
+            BlocBuilder<QuranAudioBloc, QuranAudioState>(
+              builder: (context, audioState) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: QuranActionsBar(
+                    currentReciterName: audioState.selectedReciter?.nameArabic,
+                    onSelectReciter: () => _openRecitersSheet(context, audioState),
+                    onMemorization: () => _openMemorizationSheet(context),
+                    onIndexTap: () => _openSurahIndexSheet(context),
+                    onJuzTap: () => _openJuzIndexSheet(context),
+                    onPagesTap: () => _openPagesIndexSheet(context),
+                  ),
+                );
+              },
+            ),
+
+            // 3. المنطقة السفلية (المشغل) - حجم ثابت في الأسفل
+            _buildBottomPlayer(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomPlayer(BuildContext context) {
+    return Container(
+      height: 90, // ارتفاع ثابت ومناسب
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, -2),
+          ),
+        ],
+        // حواف دائرية من الأعلى فقط
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, // توزيع العناصر
+        children: [
+          // زر الإعدادات (يمين) - تم نقله للشريط العلوي لكن أبقيناه هنا كخيار إضافي إذا رغبت
+          // يمكن إزالته أو استبداله بزر آخر مستقبلاً
+          IconButton(
+            icon: const Icon(Icons.settings_voice, color: Colors.brown, size: 28),
+            onPressed: () {
+               // تم نقل الوظيفة للشريط العلوي، يمكن جعل هذا الزر لشيء آخر
+               _openMemorizationSheet(context);
+            },
+          ),
+
+          // معلومات القارئ (وسط)
+          Expanded(
+            child: BlocBuilder<QuranAudioBloc, QuranAudioState>(
+              builder: (context, state) {
+                String statusText = "جاهز للتشغيل";
+                if (state.status == AudioStatus.playing) statusText = "جارِ التلاوة...";
+                if (state.status == AudioStatus.loading) statusText = "جاري التحميل...";
+                if (state.status == AudioStatus.paused) statusText = "موقوف مؤقتاً";
+
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      state.selectedReciter?.nameArabic ?? "جاري جلب القراء...",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // زر التشغيل (يسار)
+          BlocBuilder<QuranAudioBloc, QuranAudioState>(
+            builder: (context, state) {
+              final isPlaying = state.status == AudioStatus.playing;
+              final isLoading = state.status == AudioStatus.loading;
+
+              return Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.brown[800],
+                  shape: BoxShape.circle,
+                ),
+                child: isLoading
+                    ? const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+                    : IconButton(
+                  icon: Icon(
+                    isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                  onPressed: () {
+                    if (isPlaying) {
+                      context.read<QuranAudioBloc>().add(PauseAudioEvent());
+                    } else {
+                      context.read<QuranAudioBloc>().add(ResumeAudioEvent());
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ دوال فتح الشيتات المنبثقة
+
+  // أ) شيت اختيار القارئ
+  void _openRecitersSheet(BuildContext context, QuranAudioState state) {
+    if (state.reciters.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'اختر القارئ للتلاوة',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: state.reciters.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final reciter = state.reciters[index];
+                      final isSelected = reciter.id == state.selectedReciter?.id;
+
+                      return ListTile(
+                        title: Text(reciter.nameArabic),
+                        subtitle: Text(
+                          reciter.style, // يستخدم الـ getter الجديد
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: Colors.green)
+                            : null,
+                        onTap: () {
+                          context.read<QuranAudioBloc>().add(ChangeReciterEvent(reciter));
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ب) شيت الحفظ والتكرار
+  void _openMemorizationSheet(BuildContext context) {
+    // هنا نصل للـ Bloc الأصلي لتمريره للشيت
+    final audioBloc = context.read<QuranAudioBloc>();
+    final navState = context.read<QuranNavigationBloc>().state;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        // ✅ تمرير الـ Bloc عبر BlocProvider.value ليكون متاحاً داخل الشيت
+        return BlocProvider.value(
+          value: audioBloc,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: MemorizationSheet(
+              // استخدام قيمة افتراضية 1 إذا لم تكن currentSurah متوفرة
+              // (يمكنك تحديث الـ State لاحقاً لتشمل السورة الحالية)
+              currentSurah: 1, 
+              currentPage: navState.currentPage,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ج) شيت فهرس السور
+  void _openSurahIndexSheet(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      // تمرير الـ navBloc للفهرس لتغيير الصفحة
+      builder: (_) => BlocProvider.value(
+        value: navBloc,
+        child: const SurahIndexSheet(),
+      ),
+    );
+  }
+
+  // د) شيت فهرس الأجزاء
+  void _openJuzIndexSheet(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => BlocProvider.value(
+        value: navBloc,
+        child: const JuzIndexSheet(),
+      ),
+    );
+  }
+
+  // هـ) شيت فهرس الصفحات
+  void _openPagesIndexSheet(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => BlocProvider.value(
+        value: navBloc,
+        child: const PagesIndexSheet(),
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\pages\quran_view_page.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\highlight_overlay.dart ==== */
+import 'package:flutter/material.dart';
+import '../../domain/entities/ayah_coordinates.dart';
+
+class HighlightOverlay extends StatelessWidget {
+  final List<AyahCoordinates> highlights;
+  final Size referenceSize; // حجم الصفحة الأصلي في ملف الـ JSON (للتحجيم)
+
+  const HighlightOverlay({
+    super.key,
+    required this.highlights,
+    // بناءً على ملف 001.json، العرض التقريبي للإحداثيات هو 230 والارتفاع 350
+    // قد تحتاج لضبط هذه القيم بدقة بعد تجربة أول صفحة
+    this.referenceSize = const Size(230, 350), 
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (highlights.isEmpty) return const SizedBox.shrink();
+
+    return CustomPaint(
+      painter: _HighlightPainter(
+        highlights: highlights,
+        referenceSize: referenceSize,
+      ),
+      child: Container(),
+    );
+  }
+}
+
+class _HighlightPainter extends CustomPainter {
+  final List<AyahCoordinates> highlights;
+  final Size referenceSize;
+
+  _HighlightPainter({required this.highlights, required this.referenceSize});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = Colors.yellow.withOpacity(0.4) // لون التظليل الشفاف
+      ..style = PaintingStyle.fill;
+
+    // حساب نسبة التكبير/التصغير لتناسب شاشة الجوال
+    final double scaleX = size.width / referenceSize.width;
+    final double scaleY = size.height / referenceSize.height;
+
+    for (var element in highlights) {
+      final path = _parsePolygon(element.polygonData, scaleX, scaleY);
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  // تحويل النص "x,y x,y" إلى مسار رسم (Path)
+  Path _parsePolygon(String polygonString, double scaleX, double scaleY) {
+    final Path path = Path();
+    final points = polygonString.split(' ');
+
+    if (points.isNotEmpty) {
+      final firstPoint = points[0].split(',');
+      final startX = double.parse(firstPoint[0]) * scaleX;
+      final startY = double.parse(firstPoint[1]) * scaleY;
+      path.moveTo(startX, startY);
+
+      for (int i = 1; i < points.length; i++) {
+        final p = points[i].split(',');
+        if (p.length == 2) {
+          final x = double.parse(p[0]) * scaleX;
+          final y = double.parse(p[1]) * scaleY;
+          path.lineTo(x, y);
+        }
+      }
+      path.close();
+    }
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\highlight_overlay.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\juz_index_sheet.dart ==== */
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../bloc/navigation/quran_navigation_bloc.dart';
+import '../bloc/navigation/quran_navigation_event.dart';
+
+/// شيت فهرس الأجزاء
+/// يعرض 30 جزء، كل عنصر:
+/// - رقم أول صفحة في الجزء (يسار)
+/// - "الجزء X" + رقم داخل إطار (يمين)
+/// وعند الضغط على أي عنصر ينتقل إلى أول صفحة في هذا الجزء.
+class JuzIndexSheet extends StatefulWidget {
+  const JuzIndexSheet({super.key});
+
+  @override
+  State<JuzIndexSheet> createState() => _JuzIndexSheetState();
+}
+
+class _JuzIndexSheetState extends State<JuzIndexSheet> {
+  late Future<List<_JuzInfo>> _futureJuzs;
+
+  // مسار ملف الأجزاء داخل الأصول – عدِّله لو مختلف عندك
+  static const String _juzAssetPath =
+      'assets/json/quran_data/juzs_index.json';
+
+  @override
+  void initState() {
+    super.initState();
+    _futureJuzs = _loadJuzs();
+  }
+
+  Future<List<_JuzInfo>> _loadJuzs() async {
+    final jsonStr = await rootBundle.loadString(_juzAssetPath);
+    final List<dynamic> data = json.decode(jsonStr) as List<dynamic>;
+
+    final list = data.map((dynamic e) {
+      final j = e as Map<String, dynamic>;
+      return _JuzInfo(
+        id: j['id'] as int,
+        firstPage: j['page_number'] as int,
+      );
+    }).toList();
+
+    // ترتيب الأجزاء تصاعدياً
+    list.sort((a, b) => a.id.compareTo(b.id));
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+    const Color primaryBlue = Color(0xff0B4DA1);
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // عنوان الشيت
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'فهرس الأجزاء',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // قائمة الأجزاء
+              Expanded(
+                child: FutureBuilder<List<_JuzInfo>>(
+                  future: _futureJuzs,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'حدث خطأ في تحميل فهرس الأجزاء',
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      );
+                    }
+
+                    final juzList = snapshot.data ?? [];
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: juzList.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final j = juzList[index];
+
+                        return InkWell(
+                          onTap: () {
+                            navBloc.add(ChangePageEvent(j.firstPage));
+                            Navigator.pop(context);
+                          },
+                          child: Card(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  // يسار: رقم أول صفحة في الجزء
+                                  Text(
+                                    '${j.firstPage}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+
+                                  const Spacer(),
+
+                                  // يمين: "الجزء X" + رقم داخل إطار
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'الجزء ${j.id}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: primaryBlue,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: primaryBlue,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${j.id}',
+                                          style: const TextStyle(
+                                            color: primaryBlue,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// نموذج داخلي لتمثيل بيانات الجزء داخل الشيت
+class _JuzInfo {
+  final int id;
+  final int firstPage;
+
+  _JuzInfo({
+    required this.id,
+    required this.firstPage,
+  });
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\juz_index_sheet.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\memorization_controls.dart ==== */
+import 'package:flutter/material.dart';
+
+/// لون أزرق رئيسي قريب من التصميم
+const Color kMemorizationPrimaryBlue = Color(0xff0B4DA1);
+
+/// كارت عام لقسم داخل شاشة الحفظ والتكرار:
+/// - عنوان في الأعلى
+/// - محتوى (Dropdowns / Rows ...)
+class MemorizationSectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const MemorizationSectionCard({
+    super.key,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // عنوان القسم
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dropdown عام بشكل كابسولة رمادية كما في التصميم:
+/// - نص في الوسط
+/// - سهم في اليسار
+class MemorizationDropdown<T> extends StatelessWidget {
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+  final String hint;
+  final EdgeInsetsGeometry padding;
+
+  const MemorizationDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    required this.hint,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: const Color(0xffF3F4F6),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            isExpanded: true,
+            value: value,
+            items: items,
+            hint: Text(
+              hint,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+              ),
+            ),
+            icon: const Icon(Icons.keyboard_arrow_down),
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// صف يحتوي على Dropdown للسورة + Dropdown للآية
+/// يستخدم في "تحديد البدء" و "تحديد الانتهاء"
+class SurahAyahRow extends StatelessWidget {
+  final Widget surahDropdown;
+  final Widget ayahDropdown;
+
+  const SurahAyahRow({
+    super.key,
+    required this.surahDropdown,
+    required this.ayahDropdown,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Row(
+        children: [
+          // يمين: السورة
+          Expanded(child: surahDropdown),
+          const SizedBox(width: 10),
+          // يسار: الآية
+          SizedBox(
+            width: 90,
+            child: ayahDropdown,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// صف تكرار: (عنوان صغير يمين + Dropdown يسار)
+/// مثال: تكرار الآية / تكرار الفقرة
+class RepeatOptionRow<T> extends StatelessWidget {
+  final String label;
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+
+  const RepeatOptionRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            // عنوان يمين
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Dropdown يسار
+            SizedBox(
+              width: 150,
+              child: MemorizationDropdown<T>(
+                value: value,
+                items: items,
+                onChanged: onChanged,
+                hint: 'بدون تكرار',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// هيدر أزرق لشاشة الحفظ والتكرار:
+/// "الحفظ والتكرار" في المنتصف، زوايا علوية دائرية
+class MemorizationHeader extends StatelessWidget {
+  final String title;
+
+  const MemorizationHeader({
+    super.key,
+    this.title = 'الحفظ والتكرار',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          color: kMemorizationPrimaryBlue,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(18),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// زر "بدء" أسفل شاشة الحفظ والتكرار
+class MemorizationStartButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const MemorizationStartButton({
+    super.key,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('بدء'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kMemorizationPrimaryBlue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\memorization_controls.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\memorization_sheet.dart ==== */
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../data/models/reciter_model.dart';
+import '../bloc/audio/quran_audio_bloc.dart';
+import '../bloc/audio/quran_audio_event.dart';
+import '../bloc/audio/quran_audio_state.dart';
+import 'memorization_controls.dart';
+
+/// شيت الحفظ والتكرار
+/// - اختيار القارئ
+/// - تحديد البدء (سورة + آية)
+/// - تحديد الانتهاء (سورة + آية)
+/// - تكرار الآية / تكرار الفقرة
+/// - زر بدء
+class MemorizationSheet extends StatefulWidget {
+  final int currentSurah;
+  final int currentPage;
+
+  const MemorizationSheet({
+    super.key,
+    required this.currentSurah,
+    required this.currentPage,
+  });
+
+  @override
+  State<MemorizationSheet> createState() => _MemorizationSheetState();
+}
+
+class _MemorizationSheetState extends State<MemorizationSheet> {
+  // بيانات السور من surahs_index.json
+  final List<_SurahInfo> _surahs = [];
+  bool _isLoadingSurahs = true;
+
+  int? _startSurahId;
+  int? _endSurahId;
+  int? _startAyah;
+  int? _endAyah;
+
+  int _ayahRepeatCount = 0; // تكرار الآية (UI فقط حالياً)
+  int _rangeRepeatCount = 0; // تكرار الفقرة (المستخدم في PlayAudioRangeEvent)
+
+  // خيارات التكرار
+  final List<int> _repeatOptions = [0, 1, 3, 5, 10];
+
+  // مسار ملف السور – عدِّله لو مختلف عندك
+  static const String _surahsAssetPath =
+      'assets/json/quran_data/surahs_index.json';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSurahs();
+  }
+
+  Future<void> _loadSurahs() async {
+    try {
+      final jsonStr = await rootBundle.loadString(_surahsAssetPath);
+      final Map<String, dynamic> data =
+          json.decode(jsonStr) as Map<String, dynamic>;
+      final List<dynamic> chapters = data['chapters'] as List<dynamic>;
+
+      _surahs.clear();
+      for (final dynamic e in chapters) {
+        final ch = e as Map<String, dynamic>;
+        _surahInfoFromJson(ch);
+      }
+
+      _surahs.sort((a, b) => a.id.compareTo(b.id));
+
+      // إعداد القيم الابتدائية
+      final int defaultSurahId = widget.currentSurah;
+      final _SurahInfo? defaultSurah =
+          _surahs.firstWhere((s) => s.id == defaultSurahId, orElse: () {
+        return _surahs.isNotEmpty ? _surahs.first : _SurahInfo.empty();
+      });
+
+      setState(() {
+        _isLoadingSurahs = false;
+
+        _startSurahId ??= defaultSurah.id;
+        _endSurahId ??= defaultSurah.id;
+
+        _startAyah ??= 1;
+        _endAyah ??= defaultSurah.versesCount;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingSurahs = false;
+      });
+    }
+  }
+
+  void _surahInfoFromJson(Map<String, dynamic> ch) {
+    final int id = ch['id'] as int;
+    final String nameArabic = ch['name_arabic'] as String;
+    final int versesCount = ch['verses_count'] as int;
+
+    _surahs.add(
+      _SurahInfo(
+        id: id,
+        nameArabic: nameArabic,
+        versesCount: versesCount,
+      ),
+    );
+  }
+
+  _SurahInfo? _findSurah(int? id) {
+    if (id == null) return null;
+    try {
+      return _surahs.firstWhere((s) => s.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int _maxAyahForSurah(int? surahId) {
+    final info = _findSurah(surahId);
+    return info?.versesCount ?? 1;
+  }
+
+  String _repeatLabelFor(int value) {
+    switch (value) {
+      case 0:
+        return 'بدون تكرار';
+      case 1:
+        return 'مرة واحدة';
+      case 3:
+        return '3 مرات';
+      case 5:
+        return '5 مرات';
+      case 10:
+        return '10 مرات';
+      default:
+        return '$value مرة';
+    }
+  }
+
+  List<DropdownMenuItem<int>> _buildRepeatItems() {
+    return _repeatOptions
+        .map(
+          (v) => DropdownMenuItem<int>(
+            value: v,
+            child: Text(_repeatLabelFor(v)),
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xffF3F4F6),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+        height: 460,
+        child: Column(
+          children: [
+            const MemorizationHeader(),
+
+            Expanded(
+              child: _isLoadingSurahs
+                  ? const Center(child: CircularProgressIndicator())
+                  : Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: BlocBuilder<QuranAudioBloc, QuranAudioState>(
+                        builder: (context, audioState) {
+                          final reciters = audioState.reciters;
+                          final selectedReciter = audioState.selectedReciter;
+
+                          return SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                // ---------------- القسم: القارئ ----------------
+                                MemorizationSectionCard(
+                                  title: 'القارئ',
+                                  child: MemorizationDropdown<ReciterModel>(
+                                    value: selectedReciter,
+                                    items: reciters
+                                        .map(
+                                          (r) => DropdownMenuItem<
+                                              ReciterModel>(
+                                            value: r,
+                                            child: Text(r.nameArabic),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (reciter) {
+                                      if (reciter == null) return;
+                                      context
+                                          .read<QuranAudioBloc>()
+                                          .add(ChangeReciterEvent(reciter));
+                                    },
+                                    hint: 'اختر القارئ',
+                                  ),
+                                ),
+
+                                // ------------- القسم: تحديد البدء -------------
+                                MemorizationSectionCard(
+                                  title: 'تحديد البدء',
+                                  child: SurahAyahRow(
+                                    surahDropdown: MemorizationDropdown<int>(
+                                      value: _startSurahId,
+                                      items: _surahs
+                                          .map(
+                                            (s) => DropdownMenuItem<int>(
+                                              value: s.id,
+                                              child:
+                                                  Text('${s.id}. ${s.nameArabic}'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _startSurahId = value;
+                                          _startAyah = 1;
+                                        });
+                                      },
+                                      hint: 'اختر السورة',
+                                    ),
+                                    ayahDropdown: MemorizationDropdown<int>(
+                                      value: _startAyah,
+                                      items: List<int>.generate(
+                                        _maxAyahForSurah(_startSurahId),
+                                        (i) => i + 1,
+                                      )
+                                          .map(
+                                            (v) => DropdownMenuItem<int>(
+                                              value: v,
+                                              child: Text('$v'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _startAyah = value;
+                                        });
+                                      },
+                                      hint: 'آية',
+                                    ),
+                                  ),
+                                ),
+
+                                // ----------- القسم: تحديد الانتهاء ------------
+                                MemorizationSectionCard(
+                                  title: 'تحديد الانتهاء',
+                                  child: SurahAyahRow(
+                                    surahDropdown: MemorizationDropdown<int>(
+                                      value: _endSurahId,
+                                      items: _surahs
+                                          .map(
+                                            (s) => DropdownMenuItem<int>(
+                                              value: s.id,
+                                              child:
+                                                  Text('${s.id}. ${s.nameArabic}'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _endSurahId = value;
+                                          _endAyah =
+                                              _maxAyahForSurah(_endSurahId);
+                                        });
+                                      },
+                                      hint: 'اختر السورة',
+                                    ),
+                                    ayahDropdown: MemorizationDropdown<int>(
+                                      value: _endAyah,
+                                      items: List<int>.generate(
+                                        _maxAyahForSurah(_endSurahId),
+                                        (i) => i + 1,
+                                      )
+                                          .map(
+                                            (v) => DropdownMenuItem<int>(
+                                              value: v,
+                                              child: Text('$v'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _endAyah = value;
+                                        });
+                                      },
+                                      hint: 'آية',
+                                    ),
+                                  ),
+                                ),
+
+                                // ---------------- القسم: التكرار ----------------
+                                MemorizationSectionCard(
+                                  title: 'التكرار',
+                                  child: Column(
+                                    children: [
+                                      RepeatOptionRow<int>(
+                                        label: 'تكرار الآية',
+                                        value: _ayahRepeatCount,
+                                        items: _buildRepeatItems(),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _ayahRepeatCount = value ?? 0;
+                                          });
+                                        },
+                                      ),
+                                      RepeatOptionRow<int>(
+                                        label: 'تكرار الفقرة',
+                                        value: _rangeRepeatCount,
+                                        items: _buildRepeatItems(),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _rangeRepeatCount = value ?? 0;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+
+            // ----------------- زر "بدء" في الأسفل -----------------
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
+              child: MemorizationStartButton(
+                onPressed: _onStartPressed,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onStartPressed() {
+    final audioBloc = context.read<QuranAudioBloc>();
+
+    if (_startSurahId == null ||
+        _endSurahId == null ||
+        _startAyah == null ||
+        _endAyah == null) {
+      Navigator.pop(context);
+      return;
+    }
+
+    // حالياً: نقيّد التشغيل على نفس السورة فقط (لتبسيط المنطق)
+    int surahNumber = _startSurahId!;
+    if (_endSurahId != _startSurahId) {
+      // لو اختلفت السور، نخلي النهاية ضمن نفس السورة
+      _endSurahId = _startSurahId;
+    }
+
+    int startAyah = _startAyah!;
+    int endAyah = _endAyah!;
+
+    if (endAyah < startAyah) {
+      final tmp = startAyah;
+      startAyah = endAyah;
+      endAyah = tmp;
+    }
+
+    // لو تكرار الفقرة = 0 نعتبره مرة واحدة على الأقل
+    final int repeatCount = _rangeRepeatCount == 0 ? 1 : _rangeRepeatCount;
+
+    audioBloc.add(
+      PlayAudioRangeEvent(
+        surahNumber: surahNumber,
+        startAyah: startAyah,
+        endAyah: endAyah,
+        repeatCount: repeatCount,
+      ),
+    );
+
+    Navigator.pop(context);
+  }
+}
+
+// نموذج داخلي لبيانات السورة
+class _SurahInfo {
+  final int id;
+  final String nameArabic;
+  final int versesCount;
+
+  _SurahInfo({
+    required this.id,
+    required this.nameArabic,
+    required this.versesCount,
+  });
+
+  factory _SurahInfo.empty() =>
+      _SurahInfo(id: 1, nameArabic: 'الفاتحة', versesCount: 7);
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\memorization_sheet.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\pages_index_sheet.dart ==== */
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../bloc/navigation/quran_navigation_bloc.dart';
+import '../bloc/navigation/quran_navigation_event.dart';
+import '../bloc/navigation/quran_navigation_state.dart';
+
+/// شيت فهرس الصفحات
+/// يعرض قائمة من صفحة 1 إلى 604
+/// وعند الضغط على أي صفحة ينتقل مباشرة إليها.
+class PagesIndexSheet extends StatelessWidget {
+  const PagesIndexSheet({super.key});
+
+  static const int _totalPages = 604;
+
+  @override
+  Widget build(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // عنوان الشيت
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'فهرس الصفحات',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // قائمة الصفحات
+              Expanded(
+                child: BlocBuilder<QuranNavigationBloc, QuranNavigationState>(
+                  builder: (context, state) {
+                    final int currentPage = state.currentPage;
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _totalPages,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final pageNumber = index + 1;
+                        final bool isCurrent = pageNumber == currentPage;
+
+                        return ListTile(
+                          onTap: () {
+                            navBloc.add(ChangePageEvent(pageNumber));
+                            Navigator.pop(context);
+                          },
+                          leading: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: isCurrent
+                                ? const Color(0xff0B4DA1)
+                                : Colors.grey.shade300,
+                            child: Text(
+                              '$pageNumber',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isCurrent
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            'صفحة $pageNumber',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: isCurrent
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isCurrent
+                                  ? const Color(0xff0B4DA1)
+                                  : Colors.black87,
+                            ),
+                          ),
+                          trailing: isCurrent
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Color(0xff0B4DA1),
+                                )
+                              : const Icon(
+                                  Icons.chevron_left,
+                                  color: Colors.grey,
+                                ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\pages_index_sheet.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\quran_actions_bar.dart ==== */
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\quran_actions_bar.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\quran_page_image.dart ==== */
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/utils/assets_manager.dart';
+
+class QuranPageImage extends StatelessWidget {
+  final int pageNumber;
+  final String mushafType;
+
+  const QuranPageImage({
+    super.key,
+    required this.pageNumber,
+    required this.mushafType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // تحديد الرابط بناءً على نوع المصحف
+    String baseUrl;
+    switch (mushafType) {
+      case 'warsh': baseUrl = AppConstants.warshBaseUrl; break;
+      case 'kalon': baseUrl = AppConstants.kalonBaseUrl; break;
+      case 'dory': baseUrl = AppConstants.doryBaseUrl; break;
+      default: baseUrl = AppConstants.hafsBaseUrl;
+    }
+
+    final imageUrl = AssetsManager.getPageImageUrl(
+      baseUrl: baseUrl,
+      pageNumber: pageNumber,
+    );
+
+    return Container(
+      // لون الورق الخلفي (بيج فاتح مريح للعين)
+      color: const Color(0xFFFFF8E1), 
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.fill, // ملء الشاشة (قد يحتاج تعديل حسب نسبة الأبعاد)
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.broken_image, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+}
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\quran_page_image.dart ==== */
+
+/* ==== BEGIN FILE: C:\daawah_app\lib\features\quran\presentation\widgets\surah_index_sheet.dart ==== */
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../bloc/navigation/quran_navigation_bloc.dart';
+import '../bloc/navigation/quran_navigation_event.dart';
+
+/// شيت فهرس السور
+/// يعرض قائمة بالسور (الاسم، رقم السورة، مكية/مدنية، عدد الآيات، أول صفحة)
+/// وعند الضغط على أي سورة ينتقل مباشرة إلى أول صفحة في هذه السورة.
+class SurahIndexSheet extends StatefulWidget {
+  const SurahIndexSheet({super.key});
+
+  @override
+  State<SurahIndexSheet> createState() => _SurahIndexSheetState();
+}
+
+class _SurahIndexSheetState extends State<SurahIndexSheet> {
+  late Future<List<_SurahInfo>> _futureSurahs;
+
+  // مسار ملف السور داخل الأصول – عدِّله لو مختلف عندك
+  static const String _surahsAssetPath =
+      'assets/json/quran_data/surahs_index.json';
+
+  @override
+  void initState() {
+    super.initState();
+    _futureSurahs = _loadSurahs();
+  }
+
+  Future<List<_SurahInfo>> _loadSurahs() async {
+    final jsonStr = await rootBundle.loadString(_surahsAssetPath);
+    final Map<String, dynamic> data =
+        json.decode(jsonStr) as Map<String, dynamic>;
+
+    final List<dynamic> chapters = data['chapters'] as List<dynamic>;
+
+    final List<_SurahInfo> list = chapters.map((dynamic e) {
+      final ch = e as Map<String, dynamic>;
+
+      final int id = ch['id'] as int;
+      final String nameArabic = ch['name_arabic'] as String;
+      final String revelationPlace = ch['revelation_place'] as String;
+      final int versesCount = ch['verses_count'] as int;
+      final List pages = ch['pages'] as List;
+      final int firstPage = pages.first as int;
+
+      return _SurahInfo(
+        id: id,
+        nameArabic: nameArabic,
+        revelationPlace: revelationPlace,
+        versesCount: versesCount,
+        firstPage: firstPage,
+      );
+    }).toList();
+
+    // نضمن الترتيب التصاعدي للسور
+    list.sort((a, b) => a.id.compareTo(b.id));
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navBloc = context.read<QuranNavigationBloc>();
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // عنوان الشيت
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'فهرس السور',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // قائمة السور
+              Expanded(
+                child: FutureBuilder<List<_SurahInfo>>(
+                  future: _futureSurahs,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'حدث خطأ في تحميل فهرس السور',
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      );
+                    }
+
+                    final surahs = snapshot.data ?? [];
+
+                    return Stack(
+                      children: [
+                        // خط طولي على اليسار كشكل جمالي (يشبه الصورة)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            width: 1.5,
+                            margin: const EdgeInsets.only(top: 0),
+                            color: const Color(0xff00BCD4), // لون سماوي خفيف
+                          ),
+                        ),
+                        ListView.separated(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          itemCount: surahs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final s = surahs[index];
+                            final String placeArabic =
+                                s.revelationPlace == 'madinah'
+                                    ? 'مدنية'
+                                    : 'مكية';
+
+                            return InkWell(
+                              onTap: () {
+                                navBloc.add(ChangePageEvent(s.firstPage));
+                                Navigator.pop(context);
+                              },
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // يسار: نص "صفحة X"
+                                    SizedBox(
+                                      width: 80,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'صفحة ${s.firstPage}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // فاصل بسيط (المسافة عن الخط العمودي)
+                                    const SizedBox(width: 4),
+
+                                    // يمين: رقم السورة + اسمها + تفاصيلها
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${s.id} - سورة ${s.nameArabic}',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$placeArabic • آياتها ${s.versesCount}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.black54,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    const Icon(
+                                      Icons.chevron_left,
+                                      color: Colors.grey,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// نموذج داخلي لتمثيل بيانات السورة داخل الشيت
+class _SurahInfo {
+  final int id;
+  final String nameArabic;
+  final String revelationPlace; // "makkah" أو "madinah"
+  final int versesCount;
+  final int firstPage;
+
+  _SurahInfo({
+    required this.id,
+    required this.nameArabic,
+    required this.revelationPlace,
+    required this.versesCount,
+    required this.firstPage,
+  });
+}
+
+
+/* ==== END FILE: C:\daawah_app\lib\features\quran\presentation\widgets\surah_index_sheet.dart ==== */

@@ -1,5 +1,3 @@
-/* ==== BEGIN FILE: C:\daawah_app\lib\data\repositories\program_repository.dart ==== */
-
 import '../datasources/api_service.dart';
 import '../models/dashboard_data.dart';
 import '../models/episode_details_data.dart';
@@ -10,25 +8,57 @@ import '../models/program_slider.dart';
 import '../models/tv_show_details.dart';
 import '../models/blog_post.dart';
 import '../models/blog_post_detail.dart';
-
-// --- ⚠️ [إضافة جديدة 1/3] ---
 import '../models/tiktok_video_item.dart';
-// -------------------------
 
 class ProgramRepository {
   final ApiService _apiService = ApiService();
 
-  // --- getHomeContent ---
-  Future<DashboardData> getHomeContent() async {
+  // === 🟢 متغيرات التخزين المؤقت (Caching) ===
+
+  // 1. تخزين بيانات الصفحة الرئيسية
+  DashboardData? _cachedHomeData;
+  DateTime? _lastHomeFetchTime;
+
+  // 2. تخزين قائمة التصنيفات
+  List<GenreData>? _cachedGenres;
+  DateTime? _lastGenresFetchTime;
+
+  // 3. مدة صلاحية الكاش (24 ساعة)
+  static const Duration _cacheValidity = Duration(hours: 24);
+
+  // === 🟢 دالة مساعدة للتحقق من الصلاحية ===
+  bool _isCacheValid(DateTime? lastFetchTime) {
+    if (lastFetchTime == null) return false;
+    final difference = DateTime.now().difference(lastFetchTime);
+    return difference < _cacheValidity;
+  }
+
+  // --- getHomeContent (معدلة للكاش) ---
+  Future<DashboardData> getHomeContent({bool forceRefresh = false}) async {
+    // 1. إذا كان هناك كاش صالح ولم يتم طلب تحديث إجباري، أعد البيانات المحفوظة
+    if (_cachedHomeData != null && !forceRefresh && _isCacheValid(_lastHomeFetchTime)) {
+      print('📦 Using Cached Home Data (Last fetch: $_lastHomeFetchTime)');
+      return _cachedHomeData!;
+    }
+
     try {
-      final Map<String, dynamic> response =
-      await _apiService.getHomeDashboard(type: 'home');
+      print('🌐 Fetching Fresh Home Data from API...');
+      final Map<String, dynamic> response = await _apiService.getHomeDashboard(type: 'home');
+
       if (response['data'] != null && response['data'] is Map<String, dynamic>) {
-        return DashboardData.fromJson(response['data'] as Map<String, dynamic>);
+        // 2. حفظ البيانات الجديدة وتحديث الوقت
+        _cachedHomeData = DashboardData.fromJson(response['data'] as Map<String, dynamic>);
+        _lastHomeFetchTime = DateTime.now();
+        return _cachedHomeData!;
       } else {
         throw Exception('Invalid data structure for dashboard');
       }
     } catch (e) {
+      // في حال فشل الشبكة، إذا كان لدينا كاش قديم، نعيده بدلاً من الخطأ
+      if (_cachedHomeData != null) {
+        print('⚠️ Network Error ($e), returning cached data as fallback.');
+        return _cachedHomeData!;
+      }
       print('Error in getHomeContent: $e');
       throw Exception('Failed to load home content: $e');
     }
@@ -108,7 +138,7 @@ class ProgramRepository {
         throw Exception('Invalid data structure for video details');
       }
     } catch (e) {
-      print('Error in getVideosDetails: $e'); // [تصحيح اسم الدالة في رسالة الخطأ]
+      print('Error in getVideoDetails: $e');
       throw Exception('Failed to load video details: $e');
     }
   }
@@ -151,25 +181,42 @@ class ProgramRepository {
     }
   }
 
-  // --- getGenreList ---
+  // --- getGenreList (معدلة للكاش) ---
   Future<List<GenreData>> getGenreList({int page = 1, int perPage = 50}) async {
+    // كاش فقط للصفحة الأولى لتسريع فتح شاشة التصنيفات
+    if (page == 1 && _cachedGenres != null && _isCacheValid(_lastGenresFetchTime)) {
+      print('📦 Using Cached Genres');
+      return _cachedGenres!;
+    }
+
     try {
       final response = await _apiService.getGenreList(page, perPage);
+      List<GenreData> genres = [];
+
       if (response is List) {
-        return response
+        genres = response
             .map((json) => GenreData.fromJson(json as Map<String, dynamic>))
             .toList();
       } else if (response is Map<String, dynamic> &&
           response.containsKey('data') &&
           response['data'] is List) {
         final List<dynamic> genresJson = response['data'] as List<dynamic>;
-        return genresJson
+        genres = genresJson
             .map((json) => GenreData.fromJson(json as Map<String, dynamic>))
             .toList();
       } else {
         throw Exception('Invalid data structure for genre list');
       }
+
+      // حفظ الكاش للصفحة الأولى
+      if (page == 1) {
+        _cachedGenres = genres;
+        _lastGenresFetchTime = DateTime.now();
+      }
+      return genres;
+
     } catch (e) {
+      if (page == 1 && _cachedGenres != null) return _cachedGenres!;
       print('Error in getGenreList: $e');
       throw Exception('Failed to load genres: $e');
     }
@@ -229,8 +276,7 @@ class ProgramRepository {
           }
         }
       }
-      print(
-          'Landscape image URL not found in WP API response for episode $episodeId');
+      print('Landscape image URL not found in WP API response for episode $episodeId');
       return null;
     } catch (e) {
       print('Error in getEpisodeLandscapeImageUrl for episode $episodeId: $e');
@@ -300,24 +346,17 @@ class ProgramRepository {
     }
   }
 
-  // --- ⚠️ [إضافة جديدة 2/3] ---
   // --- getTikTokFeed ---
   Future<List<TikTokVideoItem>> getTikTokFeed() async {
     try {
-      // 1. استدعاء الدالة الجديدة من ApiService
       final List<dynamic> response = await _apiService.getTikTokFeed();
-
-      // 2. تحويل القائمة (List<dynamic>) إلى (List<TikTokVideoItem>)
       return response
           .map((json) =>
-              TikTokVideoItem.fromJson(json as Map<String, dynamic>))
+          TikTokVideoItem.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
       print('Error in getTikTokFeed Repository: $e');
       throw Exception('Failed to load TikTok feed: $e');
     }
   }
-  // --- ⚠️ [إضافة جديدة 3/3] ---
 }
-
-/* ==== END FILE: C:\daawah_app\lib\data\repositories\program_repository.dart ==== */

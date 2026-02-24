@@ -1,5 +1,3 @@
-// lib/presentation/screens/settings/settings_screen.dart
-
 import 'package:flutter/material.dart';
 import '../../../services/url_launcher_service.dart';
 import '../../../utils/app_links.dart';
@@ -11,96 +9,116 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // ✅ جعل المحتوى يمتد خلف الـ AppBar لتبدو الخلفية متصلة
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('الإعدادات'),
-        backgroundColor: Colors.white,
+        // ✅ جعل الخلفية شبه شفافة لتظهر صورة الخلفية وراءها
+        backgroundColor: Colors.white.withOpacity(0.85),
         foregroundColor: Colors.black87,
-        elevation: 1,
+        elevation: 0,
       ),
-      backgroundColor: Colors.grey[100],
-      body: ListView(
+      body: Stack(
         children: [
-          const SizedBox(height: 20),
-
-          // قسم المعلومات القانونية
-          _buildSectionTitle(context, 'المعلومات القانونية'),
-          _buildLinkTile(
-            context,
-            icon: Icons.privacy_tip_outlined,
-            title: 'سياسة الخصوصية',
-            subtitle: 'كيف نستخدم بياناتك',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WebViewScreen(
-                    title: 'سياسة الخصوصية',
-                    url: AppLinks.privacyPolicy,
-                  ),
-                ),
-              );
-            },
-          ),
-          _buildLinkTile(
-            context,
-            icon: Icons.gavel_outlined,
-            title: 'شروط الاستخدام',
-            subtitle: 'قواعد استخدام التطبيق',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WebViewScreen(
-                    title: 'شروط الاستخدام',
-                    url: AppLinks.termsOfService,
-                  ),
-                ),
-              );
-            },
+          // ✅ 1. صورة الخلفية الموحدة (نفس المستخدمة في الرئيسية)
+          Container(
+            height: double.infinity,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/bbg.jpg"),
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
 
-          // قسم عن التطبيق
-          _buildSectionTitle(context, 'عن التطبيق'),
-          _buildLinkTile(
-            context,
-            icon: Icons.info_outline,
-            title: 'عن التطبيق',
-            subtitle: 'معلومات عن قناة دعوة',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WebViewScreen(
-                    title: 'عن التطبيق',
-                    url: AppLinks.aboutUs,
-                  ),
+          // ✅ 2. المحتوى (داخل SafeArea لحمايته من النوتش والبار)
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 10, bottom: 20),
+              children: [
+                // قسم المعلومات القانونية
+                _buildSectionTitle(context, 'المعلومات القانونية'),
+                _buildLinkTile(
+                  context,
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'سياسة الخصوصية',
+                  subtitle: 'كيف نستخدم بياناتك',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(
+                          title: 'سياسة الخصوصية',
+                          url: AppLinks.privacyPolicy,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          _buildLinkTile(
-            context,
-            icon: Icons.contact_support_outlined,
-            title: 'اتصل بنا',
-            subtitle: 'للدعم الفني أو الملاحظات',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WebViewScreen(
-                    title: 'اتصل بنا',
-                    url: AppLinks.contactUs,
-                  ),
+                _buildLinkTile(
+                  context,
+                  icon: Icons.gavel_outlined,
+                  title: 'شروط الاستخدام',
+                  subtitle: 'قواعد استخدام التطبيق',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(
+                          title: 'شروط الاستخدام',
+                          url: AppLinks.termsOfService,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+
+                // قسم عن التطبيق
+                _buildSectionTitle(context, 'عن التطبيق'),
+                _buildLinkTile(
+                  context,
+                  icon: Icons.info_outline,
+                  title: 'عن التطبيق',
+                  subtitle: 'معلومات عن قناة دعوة',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(
+                          title: 'عن التطبيق',
+                          url: AppLinks.aboutUs,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildLinkTile(
+                  context,
+                  icon: Icons.contact_support_outlined,
+                  title: 'اتصل بنا',
+                  subtitle: 'للدعم الفني أو الملاحظات',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(
+                          title: 'اتصل بنا',
+                          url: AppLinks.contactUs,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                // قسم السوشيال ميديا
+                _buildSocialSection(context),
+
+                const SizedBox(height: 40),
+                _buildAppVersion(),
+              ],
+            ),
           ),
-
-          // قسم السوشيال ميديا
-          _buildSocialSection(context),
-
-          const SizedBox(height: 40),
-          _buildAppVersion(),
         ],
       ),
     );
@@ -113,14 +131,17 @@ class SettingsScreen extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).primaryColor,
+          // استخدام اللون الأبيض أو لون متباين إذا كانت الخلفية غامقة،
+          // أو الإبقاء على اللون الأساسي مع ظل خفيف
+          color: Colors.black,
           fontWeight: FontWeight.bold,
+          shadows: [const Shadow(color: Colors.black45, blurRadius: 2)],
         ),
       ),
     );
   }
 
-  // بلاطة رابط عادي (سياسة – شروط – عن التطبيق...)
+  // بلاطة رابط عادي
   Widget _buildLinkTile(
       BuildContext context, {
         required IconData icon,
@@ -131,7 +152,7 @@ class SettingsScreen extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.95), // شفافية طفيفة للكروت
         borderRadius: BorderRadius.circular(12.0),
       ),
       child: ListTile(
@@ -157,7 +178,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // قسم السوشيال ميديا باستخدام GridView
+  // قسم السوشيال ميديا
   Widget _buildSocialSection(BuildContext context) {
     final socialItems = [
       {
@@ -203,7 +224,7 @@ class SettingsScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             itemCount: socialItems.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // عمودين (3 صفوف) – شكل أنيق على الموبايل
+              crossAxisCount: 3,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
               childAspectRatio: 0.9,
@@ -235,7 +256,7 @@ class SettingsScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
       ),
-      color: const Color(0xFFF7F8FC),
+      color: const Color(0xFFF7F8FC).withOpacity(0.95), // شفافية طفيفة
       child: InkWell(
         borderRadius: BorderRadius.circular(18.0),
         onTap: () => UrlLauncherService.launchUrl(url),
@@ -280,12 +301,11 @@ class SettingsScreen extends StatelessWidget {
   // رقم إصدار التطبيق
   Widget _buildAppVersion() {
     const String appVersion = "1.0.0";
-
     return Center(
       child: Text(
         'إصدار التطبيق: $appVersion',
-        style: TextStyle(
-          color: Colors.grey[500],
+        style: const TextStyle(
+          color: Colors.black, // لون فاتح ليظهر على الخلفية
           fontSize: 12,
         ),
       ),

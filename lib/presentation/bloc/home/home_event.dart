@@ -7,5 +7,8 @@ abstract class HomeEvent extends Equatable {
   List<Object> get props => [];
 }
 
-// Event لإخبار الـ BLoC أن يبدأ جلب البيانات
+// جلب البيانات (يستخدم الكاش إن وجد وصالح)
 class FetchHomeContent extends HomeEvent {}
+
+// تحديث البيانات إجبارياً (يتجاوز الكاش) - للسحب من أعلى
+class RefreshHomeContent extends HomeEvent {}

@@ -3,7 +3,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:just_audio/just_audio.dart';
 
 import '../../bloc/quran/quran_reader_cubit.dart';
 import '../../../data/models/quran_models.dart';

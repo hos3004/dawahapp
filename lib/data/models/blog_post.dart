@@ -2,7 +2,7 @@
 
 import 'package:equatable/equatable.dart';
 import '../../utils/common.dart'; //
-import 'package:html/parser.dart'; //
+//
 
 /// مودل بسيط لبيانات المقال
 class BlogPost extends Equatable {

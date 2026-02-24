@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../models/quran_models.dart';
 import '../../utils/constants.dart';
-import 'package:nb_utils/nb_utils.dart';
 
 class QuranRepository {
 
