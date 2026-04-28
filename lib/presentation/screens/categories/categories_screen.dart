@@ -7,16 +7,21 @@ import 'category_browse_screen.dart';
 
 // --- Bloc Events ---
 abstract class CategoriesEvent {}
+
 class FetchCategories extends CategoriesEvent {}
 
 // --- Bloc States ---
 abstract class CategoriesState {}
+
 class CategoriesInitial extends CategoriesState {}
+
 class CategoriesLoading extends CategoriesState {}
+
 class CategoriesLoadSuccess extends CategoriesState {
   final List<GenreData> genres;
   CategoriesLoadSuccess(this.genres);
 }
+
 class CategoriesLoadFailure extends CategoriesState {
   final String error;
   CategoriesLoadFailure(this.error);
@@ -29,7 +34,8 @@ class CategoriesBloc extends Bloc<CategoriesEvent, CategoriesState> {
     on<FetchCategories>(_onFetchCategories);
   }
 
-  Future<void> _onFetchCategories(FetchCategories event, Emitter<CategoriesState> emit) async {
+  Future<void> _onFetchCategories(
+      FetchCategories event, Emitter<CategoriesState> emit) async {
     if (state is! CategoriesLoadSuccess) {
       emit(CategoriesLoading());
     }
@@ -46,6 +52,7 @@ class CategoriesBloc extends Bloc<CategoriesEvent, CategoriesState> {
 // --- الشاشة (Widget) ---
 class CategoriesScreen extends StatelessWidget {
   const CategoriesScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     // ❌ تم حذف BlocProvider من هنا لأنه موجود الآن في main.dart
@@ -58,11 +65,15 @@ class CategoriesScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (state is CategoriesLoadFailure) {
-            return Center(child: Text('خطأ: ${state.error}', style: const TextStyle(color: Colors.white70)));
+            return Center(
+                child: Text('خطأ: ${state.error}',
+                    style: const TextStyle(color: Colors.white70)));
           }
           if (state is CategoriesLoadSuccess) {
             if (state.genres.isEmpty) {
-              return const Center(child: Text('لا توجد تصنيفات متاحة.', style: TextStyle(color: Colors.white70)));
+              return const Center(
+                  child: Text('لا توجد تصنيفات متاحة.',
+                      style: TextStyle(color: Colors.white70)));
             }
 
             return GridView.builder(
@@ -98,7 +109,9 @@ class CategoriesScreen extends StatelessWidget {
               },
             );
           }
-          return const Center(child: Text('حالة غير معروفة', style: TextStyle(color: Colors.black)));
+          return const Center(
+              child: Text('حالة غير معروفة',
+                  style: TextStyle(color: Colors.black)));
         },
       ),
     );

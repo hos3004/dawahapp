@@ -1,0 +1,34 @@
+{
+  "routine": [
+    {
+      "id": 101,
+      "title": "أذكار الصباح",
+      "body": "ابدأ يومك بذكر الله",
+      "time": "06:00:00",
+      "days": ["daily"],
+      "image": "assets/images/morning_azkar.jpg",
+      "type": "azkar",
+      "target_id": "morning"
+    },
+    {
+      "id": 102,
+      "title": "أذكار المساء",
+      "body": "حصن نفسك بالأذكار",
+      "time": "17:00:00",
+      "days": ["daily"],
+      "image": "assets/images/evening_azkar.jpg",
+      "type": "azkar",
+      "target_id": "evening"
+    },
+    {
+      "id": 103,
+      "title": "سورة الكهف",
+      "body": "نور ما بين الجمعتين",
+      "time": "10:00:00",
+      "days": ["friday"],
+      "image": "assets/images/kahf.jpg",
+      "type": "quran",
+      "target_id": "18"
+    }
+  ]
+}

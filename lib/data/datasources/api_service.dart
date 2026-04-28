@@ -32,7 +32,7 @@ class ApiService {
     };
 
     if (requiresAuth) {
-      final String token = await getStringAsync(TOKEN);
+      final String token = getStringAsync(TOKEN);
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }

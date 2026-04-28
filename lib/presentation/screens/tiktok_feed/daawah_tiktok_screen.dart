@@ -8,11 +8,11 @@ import 'tiktok_video_page.dart';
 
 /// الشاشة الرئيسية التي تحتوي على PageView لصفحات التيك توك
 class DaawahTikTokScreen extends StatelessWidget {
-  final bool isScreenActive;
+  final ValueNotifier<int> tabNotifier;
 
   const DaawahTikTokScreen({
     super.key,
-    required this.isScreenActive
+    required this.tabNotifier,
   });
 
   @override
@@ -21,7 +21,13 @@ class DaawahTikTokScreen extends StatelessWidget {
       create: (context) => TikTokFeedBloc(
         RepositoryProvider.of<ProgramRepository>(context),
       )..add(FetchTikTokFeed()),
-      child: TikTokFeedView(isScreenActive: isScreenActive),
+      child: ValueListenableBuilder<int>(
+        valueListenable: tabNotifier,
+        builder: (context, tabIndex, child) {
+          // TikTok is active if tabIndex is 2
+          return TikTokFeedView(isScreenActive: tabIndex == 2);
+        },
+      ),
     );
   }
 }
@@ -30,10 +36,7 @@ class DaawahTikTokScreen extends StatelessWidget {
 class TikTokFeedView extends StatefulWidget {
   final bool isScreenActive;
 
-  const TikTokFeedView({
-    super.key,
-    required this.isScreenActive
-  });
+  const TikTokFeedView({super.key, required this.isScreenActive});
 
   @override
   State<TikTokFeedView> createState() => _TikTokFeedViewState();
@@ -60,7 +63,8 @@ class _TikTokFeedViewState extends State<TikTokFeedView> {
     // إذا كان التمرير التلقائي مُفعّل، انتقل للتالي
     if (_isAutoScrollEnabled && widget.isScreenActive) {
       // التأكد أننا لسنا في الصفحة الأخيرة قبل الانتقال
-      if (_currentPageIndex < (context.read<TikTokFeedBloc>().state.videos.length - 1)) {
+      if (_currentPageIndex <
+          (context.read<TikTokFeedBloc>().state.videos.length - 1)) {
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -77,51 +81,7 @@ class _TikTokFeedViewState extends State<TikTokFeedView> {
   }
   // -------------------------
 
-
-  /// ويدجت لبناء أزرار التنقل (أعلى/أسفل)
-  Widget _buildNavigationButtons(TikTokFeedState state) {
-    return Positioned(
-      bottom: 30,
-      left: 16,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // --- زر السهم العلوي ---
-          if (_currentPageIndex > 0)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: CircleAvatar(
-                backgroundColor: Colors.black.withOpacity(0.4),
-                child: IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_up, color: Colors.white),
-                  onPressed: () {
-                    _pageController.previousPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                ),
-              ),
-            ),
-
-          // --- زر السهم السفلي ---
-          if (_currentPageIndex < state.videos.length - 1)
-            CircleAvatar(
-              backgroundColor: Colors.black.withOpacity(0.4),
-              child: IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                onPressed: () {
-                  _pageController.nextPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  // --- ملاحظة: تمت إزالة أزرار التنقل اليدوية (الأسهم) للاعتماد الكلي على السحب (Swiping) ---
 
   @override
   Widget build(BuildContext context) {
@@ -129,8 +89,8 @@ class _TikTokFeedViewState extends State<TikTokFeedView> {
       color: Colors.black,
       child: BlocBuilder<TikTokFeedBloc, TikTokFeedState>(
         builder: (context, state) {
-
-          if (state is TikTokFeedInitial || (state is TikTokFeedLoading && state.videos.isEmpty)) {
+          if (state is TikTokFeedInitial ||
+              (state is TikTokFeedLoading && state.videos.isEmpty)) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -145,57 +105,48 @@ class _TikTokFeedViewState extends State<TikTokFeedView> {
           if (state.videos.isNotEmpty) {
             return Stack(
               children: [
-                // 1. عارض الصفحات
-                RefreshIndicator(
-                  onRefresh: () async {
-                    context.read<TikTokFeedBloc>().add(RefreshTikTokFeed());
+                // 1. عارض الصفحات المستمر (بدون RefreshIndicator لتجنب تضارب السحب)
+                PageView.builder(
+                  physics: const PageScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics()),
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  itemCount: state.hasReachedMax
+                      ? state.videos.length
+                      : state.videos.length + 1,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPageIndex = index;
+                    });
+                    if (index >= state.videos.length - 2 &&
+                        !state.hasReachedMax) {
+                      context.read<TikTokFeedBloc>().add(LoadMoreTikTokFeed());
+                    }
                   },
-                  child: PageView.builder(
-                    physics: const PageScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    controller: _pageController,
-                    scrollDirection: Axis.vertical,
-                    itemCount: state.hasReachedMax
-                        ? state.videos.length
-                        : state.videos.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index >= state.videos.length) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentPageIndex = index;
-                      });
-                      if (index >= state.videos.length - 2 && !state.hasReachedMax) {
-                        context.read<TikTokFeedBloc>().add(LoadMoreTikTokFeed());
-                      }
-                    },
-                    itemBuilder: (context, index) {
-                      if (index >= state.videos.length) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+                    final videoItem = state.videos[index];
+                    final bool isActiveInPageView =
+                        (index == _currentPageIndex);
 
-                      final videoItem = state.videos[index];
-                      final bool isActiveInPageView = (index == _currentPageIndex);
+                    // تمرير المتغيرات والدوال الجديدة إلى الابن
+                    return TikTokVideoPage(
+                      key: PageStorageKey<int>(videoItem.id),
+                      videoItem: videoItem,
+                      isActive: isActiveInPageView,
+                      isScreenActive: widget.isScreenActive,
 
-                      // --- ⚠️ [إضافة جديدة 3/4] ---
-                      // تمرير المتغيرات والدوال الجديدة إلى الابن
-                      return TikTokVideoPage(
-                        key: PageStorageKey<int>(videoItem.id),
-                        videoItem: videoItem,
-                        isActive: isActiveInPageView,
-                        isScreenActive: widget.isScreenActive,
-
-                        // --- المتغيرات الجديدة ---
-                        onVideoEnded: _handleVideoEnd,
-                        onToggleAutoScroll: _handleToggleAutoScroll,
-                        isAutoScrollEnabled: _isAutoScrollEnabled,
-                        // -------------------------
-                      );
-                      // --- ⚠️ [إضافة جديدة 4/4] ---
-                      // (سيظهر خطأ هنا مؤقتاً حتى نعدل الملف التالي)
-                    },
-                  ),
+                      // --- المتغيرات الجديدة ---
+                      onVideoEnded: _handleVideoEnd,
+                      onToggleAutoScroll: _handleToggleAutoScroll,
+                      isAutoScrollEnabled: _isAutoScrollEnabled,
+                      // -------------------------
+                    );
+                  },
                 ),
-
-                // 2. الأزرار (التي أضفناها)
-                _buildNavigationButtons(state),
               ],
             );
           }

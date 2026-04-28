@@ -5,9 +5,11 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    // ✅ 1. التصحيح: إضافة بلاجن خدمات جوجل هنا
+    id("com.google.gms.google-services")
 }
 
-// قراءة ملف المفاتيح (تم نقله هنا بعد الـ plugins مباشرة)
+// قراءة ملف المفاتيح
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
@@ -16,22 +18,25 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.daawahtv.app"
-    compileSdk = flutter.compileSdkVersion
+    // ✅ تحديث compileSdk ليكون 35 ليتوافق مع Android 15
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
         applicationId = "com.daawahtv.app"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // ✅ تحديث targetSdk ليكون 35 ليتوافق مع متطلبات جوجل بلاي الجديدة (نوفمبر 2025)
+        targetSdk = 35 
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -48,13 +53,16 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
-
-            // تحسينات النسخة النهائية
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // ✅ 2. تم حذف السطر الخاطئ (classpath) من هنا
 }
 
 flutter {

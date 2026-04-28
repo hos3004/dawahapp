@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:nb_utils/nb_utils.dart';
+
 import '../datasources/api_service.dart';
 import '../models/dashboard_data.dart';
 import '../models/episode_details_data.dart';
@@ -23,7 +26,11 @@ class ProgramRepository {
   List<GenreData>? _cachedGenres;
   DateTime? _lastGenresFetchTime;
 
-  // 3. مدة صلاحية الكاش (24 ساعة)
+  // 3. تخزين محتوى التبويبات الداخلية (tv_show, movie, video)
+  final Map<String, List<ProgramSlider>> _cachedTypedContent = {};
+  final Map<String, DateTime> _lastTypedContentFetchTime = {};
+
+  // 4. مدة صلاحية الكاش (24 ساعة)
   static const Duration _cacheValidity = Duration(hours: 24);
 
   // === 🟢 دالة مساعدة للتحقق من الصلاحية ===
@@ -33,52 +40,175 @@ class ProgramRepository {
     return difference < _cacheValidity;
   }
 
-  // --- getHomeContent (معدلة للكاش) ---
+  // --- getHomeContent (معدلة للكاش الدائم) ---
   Future<DashboardData> getHomeContent({bool forceRefresh = false}) async {
-    // 1. إذا كان هناك كاش صالح ولم يتم طلب تحديث إجباري، أعد البيانات المحفوظة
-    if (_cachedHomeData != null && !forceRefresh && _isCacheValid(_lastHomeFetchTime)) {
-      print('📦 Using Cached Home Data (Last fetch: $_lastHomeFetchTime)');
+    // محاولة استرجاع الكاش الدائم إذا لم يكن الكاش بالذاكرة متوفراً
+    if (_cachedHomeData == null) {
+      final String cachedJson = getStringAsync('persistent_home_cache');
+      final int cachedTime =
+          getIntAsync('persistent_home_cache_time', defaultValue: 0);
+
+      if (cachedJson.isNotEmpty) {
+        try {
+          final Map<String, dynamic> decoded = jsonDecode(cachedJson);
+          _cachedHomeData = DashboardData.fromJson(decoded);
+
+          if (cachedTime > 0) {
+            _lastHomeFetchTime =
+                DateTime.fromMillisecondsSinceEpoch(cachedTime);
+          }
+          print('📦 Loaded persistent cache for Home directly');
+        } catch (e) {
+          print('Cache read error: $e');
+        }
+      }
+    }
+
+    // إذا وجد كاش صالح ولم نطلب التحديث بقوة، نرجعه ونقوم بالتحديث في الخلفية بصمت
+    if (_cachedHomeData != null && !forceRefresh) {
+      if (!_isCacheValid(_lastHomeFetchTime)) {
+        _fetchAndSaveHomeContent(); // تحديث شبحي في الخلفية
+      }
       return _cachedHomeData!;
     }
 
+    // الانتظار الفعلي للشبكة في حالة forceRefresh أو عدم وجود بيانات نهائيا
+    return await _fetchAndSaveHomeContent();
+  }
+
+  Future<DashboardData> _fetchAndSaveHomeContent() async {
     try {
       print('🌐 Fetching Fresh Home Data from API...');
-      final Map<String, dynamic> response = await _apiService.getHomeDashboard(type: 'home');
+      final Map<String, dynamic> response =
+          await _apiService.getHomeDashboard(type: 'home');
 
-      if (response['data'] != null && response['data'] is Map<String, dynamic>) {
-        // 2. حفظ البيانات الجديدة وتحديث الوقت
-        _cachedHomeData = DashboardData.fromJson(response['data'] as Map<String, dynamic>);
-        _lastHomeFetchTime = DateTime.now();
+      if (response['data'] != null &&
+          response['data'] is Map<String, dynamic>) {
+        final Map<String, dynamic> data =
+            response['data'] as Map<String, dynamic>;
+
+        final now = DateTime.now();
+
+        // حفظ البيانات محلياً ليتم استخدامها فورا في المرة القادمة
+        setValue('persistent_home_cache', jsonEncode(data));
+        setValue('persistent_home_cache_time',
+            now.millisecondsSinceEpoch); // حفظ الـ Timestamp
+
+        _cachedHomeData = DashboardData.fromJson(data);
+        _lastHomeFetchTime = now;
         return _cachedHomeData!;
       } else {
         throw Exception('Invalid data structure for dashboard');
       }
     } catch (e) {
-      // في حال فشل الشبكة، إذا كان لدينا كاش قديم، نعيده بدلاً من الخطأ
       if (_cachedHomeData != null) {
         print('⚠️ Network Error ($e), returning cached data as fallback.');
         return _cachedHomeData!;
       }
-      print('Error in getHomeContent: $e');
+      print('Error in _fetchAndSaveHomeContent: $e');
       throw Exception('Failed to load home content: $e');
     }
   }
 
-  // --- getDashboardSlidersByType ---
-  Future<List<ProgramSlider>> getDashboardSlidersByType(String type) async {
-    try {
-      final Map<String, dynamic> response =
-      await _apiService.getHomeDashboard(type: type);
-      List<ProgramSlider> dynamicSliders = [];
-      if (response['data'] != null && response['data']['sliders'] is List) {
-        dynamicSliders = (response['data']['sliders'] as List)
-            .map((sliderJson) =>
-            ProgramSlider.fromJson(sliderJson as Map<String, dynamic>))
+  // --- getDashboardSlidersByType (معدلة للكاش الدائم) ---
+  Future<List<ProgramSlider>> getDashboardSlidersByType(String type,
+      {bool forceRefresh = false}) async {
+    // محاولة استرجاع الكاش الدائم
+    if (!_cachedTypedContent.containsKey(type)) {
+      final String cachedJson = getStringAsync('persistent_typed_cache_$type');
+      final int cachedTime =
+          getIntAsync('persistent_typed_cache_time_$type', defaultValue: 0);
+
+      if (cachedJson.isNotEmpty) {
+        try {
+          final List<dynamic> decoded = jsonDecode(cachedJson);
+          _cachedTypedContent[type] = decoded
+              .map((e) => ProgramSlider.fromJson(e as Map<String, dynamic>))
+              .toList();
+
+          if (cachedTime > 0) {
+            _lastTypedContentFetchTime[type] =
+                DateTime.fromMillisecondsSinceEpoch(cachedTime);
+          }
+          print('📦 Loaded persistent cache for Typed Content ($type)');
+        } catch (e) {
+          print('Cache read error for $type: $e');
+        }
+      }
+    }
+
+    // إذا وجد كاش صالح ولم نطلب التحديث بقوة
+    if (_cachedTypedContent.containsKey(type) && !forceRefresh) {
+      if (!_isCacheValid(_lastTypedContentFetchTime[type])) {
+        _fetchAndSaveTypedContent(type); // تحديث شبحي في الخلفية
+      }
+      return _cachedTypedContent[type]!;
+    }
+
+    return await _fetchAndSaveTypedContent(type);
+  }
+
+  // --- getSyncCachedTypedContent (جلب متزامن لمنع ظهور شاشة التحميل) ---
+  List<ProgramSlider>? getSyncCachedTypedContent(String type) {
+    if (_cachedTypedContent.containsKey(type)) {
+      return _cachedTypedContent[type];
+    }
+    final String cachedJson = getStringAsync('persistent_typed_cache_$type');
+    if (cachedJson.isNotEmpty) {
+      try {
+        final List<dynamic> decoded = jsonDecode(cachedJson);
+        final sliders = decoded
+            .map((e) => ProgramSlider.fromJson(e as Map<String, dynamic>))
             .toList();
+
+        _cachedTypedContent[type] = sliders;
+
+        final int cachedTime =
+            getIntAsync('persistent_typed_cache_time_$type', defaultValue: 0);
+        if (cachedTime > 0) {
+          _lastTypedContentFetchTime[type] =
+              DateTime.fromMillisecondsSinceEpoch(cachedTime);
+        }
+        return sliders;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  Future<List<ProgramSlider>> _fetchAndSaveTypedContent(String type) async {
+    try {
+      print('🌐 Fetching Fresh Typed Content ($type) from API...');
+      final Map<String, dynamic> response =
+          await _apiService.getHomeDashboard(type: type);
+      List<ProgramSlider> dynamicSliders = [];
+
+      if (response['data'] != null && response['data']['sliders'] is List) {
+        final List sliderList = response['data']['sliders'] as List;
+
+        final now = DateTime.now();
+        // حفظ البيانات محلياً
+        setValue('persistent_typed_cache_$type', jsonEncode(sliderList));
+        setValue(
+            'persistent_typed_cache_time_$type', now.millisecondsSinceEpoch);
+
+        dynamicSliders = sliderList
+            .map((sliderJson) =>
+                ProgramSlider.fromJson(sliderJson as Map<String, dynamic>))
+            .toList();
+
+        _cachedTypedContent[type] = dynamicSliders;
+        _lastTypedContentFetchTime[type] = now;
       }
       return dynamicSliders;
     } catch (e) {
-      print('Error in getDashboardSlidersByType for type $type: $e');
+      if (_cachedTypedContent.containsKey(type)) {
+        print(
+            '⚠️ Network Error ($e), returning cached data for $type as fallback.');
+        return _cachedTypedContent[type]!;
+      }
+      print('Error in _fetchAndSaveTypedContent for type $type: $e');
       throw Exception('Failed to load dashboard content for type $type: $e');
     }
   }
@@ -87,7 +217,7 @@ class ProgramRepository {
   Future<TvShowDetails> getProgramDetails(int programId) async {
     try {
       final Map<String, dynamic> response =
-      await _apiService.getTvShowDetails(programId);
+          await _apiService.getTvShowDetails(programId);
       if (response['data'] != null &&
           response['data']['details'] is Map<String, dynamic>) {
         return TvShowDetails.fromJson(
@@ -107,7 +237,7 @@ class ProgramRepository {
   Future<TvShowDetails> getMovieDetails(int movieId) async {
     try {
       final Map<String, dynamic> response =
-      await _apiService.getMovieDetails(movieId);
+          await _apiService.getMovieDetails(movieId);
       if (response['data'] != null &&
           response['data']['details'] is Map<String, dynamic>) {
         return TvShowDetails.fromJson(
@@ -127,7 +257,7 @@ class ProgramRepository {
   Future<TvShowDetails> getVideoDetails(int videoId) async {
     try {
       final Map<String, dynamic> response =
-      await _apiService.getVideoDetails(videoId);
+          await _apiService.getVideoDetails(videoId);
       if (response['data'] != null &&
           response['data']['details'] is Map<String, dynamic>) {
         return TvShowDetails.fromJson(
@@ -148,7 +278,7 @@ class ProgramRepository {
       int programId, int seasonId) async {
     try {
       final Map<String, dynamic> response =
-      await _apiService.getSeasonEpisodes(programId, seasonId);
+          await _apiService.getSeasonEpisodes(programId, seasonId);
       if (response['data'] != null && response['data']['episodes'] is List) {
         final List<dynamic> episodesJson = response['data']['episodes'] as List;
         return episodesJson
@@ -168,7 +298,7 @@ class ProgramRepository {
   Future<EpisodeDetailsData> getEpisodeDetails(int episodeId) async {
     try {
       final Map<String, dynamic> response =
-      await _apiService.getEpisodeDetails(episodeId);
+          await _apiService.getEpisodeDetails(episodeId);
       if (response['data'] is Map<String, dynamic>) {
         return EpisodeDetailsData.fromJson(
             response['data'] as Map<String, dynamic>);
@@ -184,7 +314,9 @@ class ProgramRepository {
   // --- getGenreList (معدلة للكاش) ---
   Future<List<GenreData>> getGenreList({int page = 1, int perPage = 50}) async {
     // كاش فقط للصفحة الأولى لتسريع فتح شاشة التصنيفات
-    if (page == 1 && _cachedGenres != null && _isCacheValid(_lastGenresFetchTime)) {
+    if (page == 1 &&
+        _cachedGenres != null &&
+        _isCacheValid(_lastGenresFetchTime)) {
       print('📦 Using Cached Genres');
       return _cachedGenres!;
     }
@@ -214,7 +346,6 @@ class ProgramRepository {
         _lastGenresFetchTime = DateTime.now();
       }
       return genres;
-
     } catch (e) {
       if (page == 1 && _cachedGenres != null) return _cachedGenres!;
       print('Error in getGenreList: $e');
@@ -230,7 +361,7 @@ class ProgramRepository {
   }) async {
     try {
       final response =
-      await _apiService.getProgramsByGenre(slug, page, perPage);
+          await _apiService.getProgramsByGenre(slug, page, perPage);
       if (response is Map<String, dynamic> &&
           response.containsKey('data') &&
           response['data'] is List) {
@@ -258,10 +389,10 @@ class ProgramRepository {
         final embedded = response['_embedded'] as Map<String, dynamic>?;
         if (embedded != null && embedded.containsKey('wp:featuredmedia')) {
           final featuredMediaList =
-          embedded['wp:featuredmedia'] as List<dynamic>?;
+              embedded['wp:featuredmedia'] as List<dynamic>?;
           if (featuredMediaList != null && featuredMediaList.isNotEmpty) {
-            final mediaDetails = featuredMediaList[0]['media_details']
-            as Map<String, dynamic>?;
+            final mediaDetails =
+                featuredMediaList[0]['media_details'] as Map<String, dynamic>?;
             if (mediaDetails != null && mediaDetails.containsKey('sizes')) {
               final sizes = mediaDetails['sizes'] as Map<String, dynamic>?;
               if (sizes != null) {
@@ -276,7 +407,8 @@ class ProgramRepository {
           }
         }
       }
-      print('Landscape image URL not found in WP API response for episode $episodeId');
+      print(
+          'Landscape image URL not found in WP API response for episode $episodeId');
       return null;
     } catch (e) {
       print('Error in getEpisodeLandscapeImageUrl for episode $episodeId: $e');
@@ -291,8 +423,7 @@ class ProgramRepository {
     int perPage = 15,
   }) async {
     try {
-      final response =
-      await _apiService.searchPrograms(query, page, perPage);
+      final response = await _apiService.searchPrograms(query, page, perPage);
       if (response is Map<String, dynamic> &&
           response.containsKey('data') &&
           response['data'] is List) {
@@ -351,8 +482,12 @@ class ProgramRepository {
     try {
       final List<dynamic> response = await _apiService.getTikTokFeed();
       return response
-          .map((json) =>
-          TikTokVideoItem.fromJson(json as Map<String, dynamic>))
+          .where((item) {
+            final Map<String, dynamic> json = item as Map<String, dynamic>;
+            final bool isHidden = json['is_hidden'] == true;
+            return !isHidden;
+          })
+          .map((json) => TikTokVideoItem.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
       print('Error in getTikTokFeed Repository: $e');

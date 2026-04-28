@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "176003170258",
+    "project_id": "daawahtv-43198",
+    "storage_bucket": "daawahtv-43198.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:176003170258:android:d5887680d65a9ac69d120b",
+        "android_client_info": {
+          "package_name": "com.daawahtv.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjOHXrC2rJ8MknQbELUsrzOwt_2an5ub0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

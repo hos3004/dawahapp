@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# User added
+*.zip
+/New folder/
+daawah_dart_code.txt
+* (2).gitignore
+

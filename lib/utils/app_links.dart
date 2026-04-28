@@ -2,7 +2,7 @@
 
 class AppLinks {
   // --- الروابط الداخلية (تفتح ويب-فيو) ---
-  static const String privacyPolicy = "assets/web/privacy.html";
+  static const String privacyPolicy = "https://daawah.tv/app/privacy.html";
   static const String termsOfService = "assets/web/terms.html";
   static const String aboutUs = "assets/web/aboutus.html";
   static const String contactUs = "https://daawah.tv/contact-us/";

@@ -6,6 +6,7 @@ import '../../widgets/horizontal_program_row.dart';
 
 // --- Bloc Events ---
 abstract class TypedContentEvent {}
+
 class FetchTypedContent extends TypedContentEvent {
   final String type; // movie, tv_show, video
   FetchTypedContent(this.type);
@@ -13,12 +14,16 @@ class FetchTypedContent extends TypedContentEvent {
 
 // --- Bloc States ---
 abstract class TypedContentState {}
+
 class TypedContentInitial extends TypedContentState {}
+
 class TypedContentLoading extends TypedContentState {}
+
 class TypedContentLoadSuccess extends TypedContentState {
   final List<ProgramSlider> sliders;
   TypedContentLoadSuccess(this.sliders);
 }
+
 class TypedContentLoadFailure extends TypedContentState {
   final String error;
   TypedContentLoadFailure(this.error);
@@ -28,55 +33,100 @@ class TypedContentLoadFailure extends TypedContentState {
 class TypedContentBloc extends Bloc<TypedContentEvent, TypedContentState> {
   final ProgramRepository _repository;
 
-  TypedContentBloc(this._repository) : super(TypedContentInitial()) {
+  TypedContentBloc(this._repository, {List<ProgramSlider>? initialData})
+      : super(initialData != null
+            ? TypedContentLoadSuccess(initialData)
+            : TypedContentInitial()) {
     on<FetchTypedContent>(_onFetchTypedContent);
   }
 
-  Future<void> _onFetchTypedContent(FetchTypedContent event, Emitter<TypedContentState> emit) async {
-    emit(TypedContentLoading());
+  Future<void> _onFetchTypedContent(
+      FetchTypedContent event, Emitter<TypedContentState> emit) async {
+    // إظهار حالة التحميل فقط إذا لم يكن لدينا بيانات بالفعل
+    if (state is! TypedContentLoadSuccess) {
+      emit(TypedContentLoading());
+    }
+
     try {
-      // استخدام الدالة الجديدة في الريبو
+      // الدالة في الريبو ستعيد الكاش الدائم فوراً إن وُجد، وتقوم بتحديث شبحي
       final sliders = await _repository.getDashboardSlidersByType(event.type);
       emit(TypedContentLoadSuccess(sliders));
     } catch (e) {
-      emit(TypedContentLoadFailure(e.toString()));
+      // في حال فشل الشبكة، لا نظهر خطأ إذا كنا نعرض الكاش بالفعل
+      if (state is! TypedContentLoadSuccess) {
+        emit(TypedContentLoadFailure(e.toString()));
+      }
     }
   }
 }
 
-
 // --- الويدجت ---
-class TypedContentTab extends StatelessWidget {
-  final String contentType; // 'movie', 'tv_show', 'video'
+class TypedContentTab extends StatefulWidget {
+  final String contentType;
 
   const TypedContentTab({super.key, required this.contentType});
 
   @override
+  State<TypedContentTab> createState() => _TypedContentTabState();
+}
+
+class _TypedContentTabState extends State<TypedContentTab> {
+  late TypedContentBloc _bloc;
+
+  @override
+  void initState() {
+    super.initState();
+    final repository =
+        RepositoryProvider.of<ProgramRepository>(context, listen: false);
+
+    // جلب متزامن للكاش ليتم عرض البيانات من الفريم الأول (بدون Loader)
+    final initialData =
+        repository.getSyncCachedTypedContent(widget.contentType);
+
+    _bloc = TypedContentBloc(repository, initialData: initialData);
+
+    // نطلب التحديث للتأكد من جلب تحديثات الخلفية إذا لزم الأمر
+    _bloc.add(FetchTypedContent(widget.contentType));
+  }
+
+  @override
+  void dispose() {
+    _bloc.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => TypedContentBloc(RepositoryProvider.of<ProgramRepository>(context))
-        ..add(FetchTypedContent(contentType)), // بدء جلب البيانات
+    return BlocProvider.value(
+      value: _bloc,
       child: BlocBuilder<TypedContentBloc, TypedContentState>(
         builder: (context, state) {
           if (state is TypedContentLoading || state is TypedContentInitial) {
             return const Center(child: CircularProgressIndicator());
           }
           if (state is TypedContentLoadFailure) {
-            return Center(child: Text('خطأ: ${state.error}', style: const TextStyle(color: Colors.white70)));
+            return Center(
+                child: Text('خطأ: ${state.error}',
+                    style: const TextStyle(color: Colors.white70)));
           }
           if (state is TypedContentLoadSuccess) {
             if (state.sliders.isEmpty) {
-              return const Center(child: Text('لا يوجد محتوى متاح حالياً.', style: TextStyle(color: Colors.white70)));
+              return const Center(
+                  child: Text('لا يوجد محتوى متاح حالياً.',
+                      style: TextStyle(color: Colors.white70)));
             }
 
             // عرض السلايدرات في قائمة رأسية
             return CustomScrollView(
               slivers: [
                 SliverPadding(
-                  padding: EdgeInsets.only(top: kToolbarHeight + MediaQuery.of(context).padding.top + 10), // ترك مسافة للـ AppBar والـ TabBar
+                  padding: EdgeInsets.only(
+                      top: kToolbarHeight +
+                          MediaQuery.of(context).padding.top +
+                          10), // ترك مسافة للـ AppBar والـ TabBar
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
-                          (context, index) {
+                      (context, index) {
                         final slider = state.sliders[index];
                         // كل السلايدرات هنا طولية (لا يوجد صف ثابت)
                         return HorizontalProgramRow(
@@ -95,7 +145,9 @@ class TypedContentTab extends StatelessWidget {
               ],
             );
           }
-          return const Center(child: Text('حالة غير معروفة', style: TextStyle(color: Colors.white70)));
+          return const Center(
+              child: Text('حالة غير معروفة',
+                  style: TextStyle(color: Colors.white70)));
         },
       ),
     );

@@ -39,9 +39,7 @@ class BlogPostDetail extends Equatable {
             finalImageUrl = sizes['full']['source_url'];
           }
         }
-        if (finalImageUrl == null) {
-          finalImageUrl = json['_embedded']['wp:featuredmedia'][0]['source_url'];
-        }
+        finalImageUrl ??= json['_embedded']['wp:featuredmedia'][0]['source_url'];
       }
     } catch (e) {
       print('Error parsing blog image: $e');

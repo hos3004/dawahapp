@@ -6,6 +6,7 @@ class TikTokVideoItem extends Equatable {
   final int id;
   final String title;
   final String youtubeUrl; // اسم الحقل في JSON هو 'youtube_url'
+  final String channelName; // اسم الحقل في JSON هو 'channel_name'
 
   // --- ⚠️ [إضافة جديدة 1/2] ---
   final List<String> tags; // حقل الهاشتاجات
@@ -15,6 +16,7 @@ class TikTokVideoItem extends Equatable {
     required this.id,
     required this.title,
     required this.youtubeUrl,
+    required this.channelName, // --- إضافة اسم القناة ---
     required this.tags, // --- ⚠️ [إضافة جديدة] ---
   });
 
@@ -48,10 +50,13 @@ class TikTokVideoItem extends Equatable {
       id: parsedId,
       title: json['title'] as String? ?? '', // افتراض أن العنوان نصي
       youtubeUrl: json['youtube_url'] as String? ?? '', // جلب الرابط
+      channelName: json['channel_name'] as String? ??
+          'قناة يوتيوب', // قيمة افتراضية في حال لم تكن موجودة
       tags: parsedTags, // --- ⚠️ [إضافة جديدة] ---
     );
   }
 
   @override
-  List<Object?> get props => [id, title, youtubeUrl, tags]; // --- ⚠️ [إضافة جديدة] ---
+  List<Object?> get props =>
+      [id, title, youtubeUrl, channelName, tags]; // --- ⚠️ [إضافة جديدة] ---
 }

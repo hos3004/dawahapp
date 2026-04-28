@@ -36,7 +36,6 @@ class TikTokVideoPage extends StatefulWidget {
 
 class _TikTokVideoPageState extends State<TikTokVideoPage>
     with AutomaticKeepAliveClientMixin<TikTokVideoPage> {
-
   @override
   bool get wantKeepAlive => true; // تفعيل الحفاظ على الصفحة
 
@@ -75,10 +74,9 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
   void _playerListener() {
     if (_isPlayerReady && mounted && !_controller!.value.isFullScreen) {
       if (mounted) {
-        setState(() { /* ... */ });
+        setState(() {/* ... */});
       }
       if (_controller!.value.playerState == PlayerState.ended) {
-
         // --- ⚠️ [إضافة 2/3]: تسجيل المشاهدة عند انتهاء الفيديو
         WatchHistoryService.addVideoToHistory(widget.videoItem.id);
         // ------------------------------------
@@ -173,38 +171,39 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. مشغل الفيديو
+        // 1. مشغل الفيديو مع تعطيل اللمس عليه (IgnorePointer) لضمان عبور السحب (Swipe) لعارض الصفحات
         Container(
           color: Colors.black,
-          child: YoutubePlayer(
-            controller: _controller!,
-            showVideoProgressIndicator: true,
-            progressIndicatorColor: progressColor,
-            progressColors: ProgressBarColors(
-              playedColor: progressColor,
-              handleColor: Colors.white, // (تم التعديل بناءً على الكود المرسل)
-              bufferedColor: Colors.white24,
-              backgroundColor: Colors.white12,
+          child: IgnorePointer(
+            ignoring:
+                true, // ⚠️ هذا هو سر حل المشكلة: تجاهل السحب على الفيديو نفسه ليمر للأب (PageView)
+            child: YoutubePlayer(
+              controller: _controller!,
+              showVideoProgressIndicator: true,
+              progressIndicatorColor: progressColor,
+              progressColors: ProgressBarColors(
+                playedColor: progressColor,
+                handleColor: Colors.white,
+                bufferedColor: Colors.white24,
+                backgroundColor: Colors.white12,
+              ),
+              onReady: () {
+                setState(() {
+                  _isPlayerReady = true;
+                });
+                final shouldBePlaying =
+                    widget.isActive && widget.isScreenActive;
+                if (shouldBePlaying) {
+                  _controller!.play();
+                } else {
+                  _controller!.pause();
+                }
+              },
+              onEnded: (meta) {
+                WatchHistoryService.addVideoToHistory(widget.videoItem.id);
+                widget.onVideoEnded();
+              },
             ),
-            onReady: () {
-              setState(() {
-                _isPlayerReady = true;
-              });
-              final shouldBePlaying =
-                  widget.isActive && widget.isScreenActive;
-              if (shouldBePlaying) {
-                _controller!.play();
-              } else {
-                _controller!.pause();
-              }
-            },
-            onEnded: (meta) {
-              // --- ⚠️ [إضافة 2/3 مكرر]: تسجيل المشاهدة عند انتهاء الفيديو
-              // (موجودة في الكود الذي أرسلته، سنبقي عليها)
-              WatchHistoryService.addVideoToHistory(widget.videoItem.id);
-              // ------------------------------------
-              widget.onVideoEnded();
-            },
           ),
         ),
 
@@ -217,7 +216,9 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
             children: [
               // أيقونة "التشغيل" (عند الإيقاف المؤقت)
               AnimatedOpacity(
-                opacity: (_controller != null && _controller!.value.isReady && !_controller!.value.isPlaying)
+                opacity: (_controller != null &&
+                        _controller!.value.isReady &&
+                        !_controller!.value.isPlaying)
                     ? 0.7
                     : 0.0,
                 duration: const Duration(milliseconds: 300),
@@ -270,30 +271,31 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(60, 16, 16, 32),
+        padding:
+            const EdgeInsets.fromLTRB(60, 16, 16, 16), // Reduced bottom padding
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [ Colors.transparent, Colors.black.withOpacity(0.6) ],
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)],
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(widget.videoItem.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 16.0, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4.0, color: Colors.black54)])),
-            if (widget.videoItem.tags.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Wrap(
-                  spacing: 8.0,
-                  runSpacing: 4.0,
-                  children: widget.videoItem.tags.map((tag) {
-                    return Text('#$tag', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13.0, fontWeight: FontWeight.w500));
-                  }).toList(),
-                ),
+            // --- اسم القناة وعنوان الفيديو مدمجان ---
+            Text(
+              '${widget.videoItem.channelName} - ${widget.videoItem.title}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15.0,
+                fontWeight: FontWeight.w600,
+                shadows: [Shadow(blurRadius: 3.0, color: Colors.black87)],
               ),
+            ),
           ],
         ),
       ),
@@ -337,6 +339,7 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
           // --- 3. زر الترتيب العشوائي (Shuffle) ---
           _buildSidebarButton(
             icon: Icons.shuffle,
+            text: 'عشوائي', // <--- النص المضاف
             onPressed: () {
               context.read<TikTokFeedBloc>().add(ShuffleTikTokFeed());
             },
@@ -347,6 +350,7 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
           // --- 4. زر المشاركة ---
           _buildSidebarButton(
             icon: Icons.share,
+            text: 'مشاركة', // <--- النص المضاف
             onPressed: _onSharePressed,
           ),
 
@@ -360,6 +364,7 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
             color: widget.isAutoScrollEnabled
                 ? Theme.of(context).primaryColor
                 : Colors.white,
+            text: 'مستمر', // <--- النص المضاف
             onPressed: widget.onToggleAutoScroll,
           ),
         ],
@@ -396,9 +401,7 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(blurRadius: 2.0, color: Colors.black54)
-                  ],
+                  shadows: [Shadow(blurRadius: 2.0, color: Colors.black54)],
                 ),
               ),
             ),
@@ -406,7 +409,6 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
       ),
     );
   }
-
 
   /// ويدجت لعرض صفحة الخطأ
   Widget _buildErrorPage(String message) {
@@ -418,9 +420,13 @@ class _TikTokVideoPageState extends State<TikTokVideoPage>
           children: [
             const Icon(Icons.error_outline, color: Colors.red, size: 50),
             const SizedBox(height: 16),
-            Text(message, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+            Text(message,
+                style: const TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text(widget.videoItem.youtubeUrl, style: const TextStyle(color: Colors.white38, fontSize: 12), textAlign: TextAlign.center),
+            Text(widget.videoItem.youtubeUrl,
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+                textAlign: TextAlign.center),
           ],
         ),
       ),

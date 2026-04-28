@@ -1,19 +1,23 @@
 import 'dart:convert';
+
 import 'package:better_player_plus/better_player_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:wakelock_plus/wakelock_plus.dart';
+
 import '../../../data/models/program_guide_item.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final int tabIndex;
-  final int currentIndex;
+  final ValueNotifier<int> tabNotifier;
   final bool isInTabView;
 
   const LiveStreamScreen({
     super.key,
     required this.tabIndex,
-    required this.currentIndex,
+    required this.tabNotifier,
     this.isInTabView = false,
   });
 
@@ -23,89 +27,127 @@ class LiveStreamScreen extends StatefulWidget {
 
 class LiveStreamScreenState extends State<LiveStreamScreen>
     with AutomaticKeepAliveClientMixin {
-  // GlobalKey for Picture-in-Picture (PIP)
   final GlobalKey _betterPlayerKey = GlobalKey();
 
   @override
   bool get wantKeepAlive => true;
 
-  final String liveStreamUrl = "http://161.97.100.71/hls/stream.m3u8";
+  final String liveStreamUrl = 'https://live.daawah.tv/hls/stream.m3u8';
+  final String _guideUrl = 'https://daawah.tv/app/prog.json';
 
   BetterPlayerController? _betterPlayerController;
+  late Future<List<ProgramGuideItem>> _guideFuture;
 
   bool _isLoading = true;
+  bool _isRefreshing = false;
   String? _error;
+  bool _manualFullscreen = false;
 
-  late Future<List<ProgramGuideItem>> _guideFuture;
-  final String _guideUrl = "https://daawah.tv/app/prog.json";
+  final Color _primaryBlue = const Color(0xFF155CB0);
+  final Color _accentRed = const Color(0xFFFF4D4D);
 
   @override
   void initState() {
     super.initState();
-    print("LiveStreamScreen: initState");
     _guideFuture = _fetchProgramGuide();
     _initializePlayer();
-
-    // --- 🔴 2. قم بإضافة هذا السطر لتفعيل منع الإغلاق ---
-    WakelockPlus.enable();
+    widget.tabNotifier.addListener(_checkPlaybackState);
   }
 
-  Future<void> _initializePlayer() async {
+  Future<void> _initializePlayer({bool isRefresh = false}) async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
+      if (isRefresh) {
+        _isRefreshing = true;
+      }
     });
 
     try {
-      BetterPlayerControlsConfiguration controlsConfiguration =
-      const BetterPlayerControlsConfiguration(
+      final oldController = _betterPlayerController;
+      _betterPlayerController = null;
+      oldController?.dispose();
+
+      const controlsConfiguration = BetterPlayerControlsConfiguration(
         enablePip: true,
         pipMenuIcon: Icons.picture_in_picture_alt,
         enableFullscreen: true,
         enableMute: true,
         enablePlayPause: true,
-        enableProgressText: true,
+        enableProgressText: false,
         liveTextColor: Colors.red,
         showControlsOnInitialize: true,
         enableSkips: false,
         enablePlaybackSpeed: false,
         enableSubtitles: false,
         enableQualities: true,
-
+        controlBarColor: Colors.black54,
+        iconsColor: Colors.white,
       );
 
-      BetterPlayerConfiguration betterPlayerConfiguration =
-      BetterPlayerConfiguration(
+      final betterPlayerConfiguration = BetterPlayerConfiguration(
         aspectRatio: 16 / 9,
         fit: BoxFit.contain,
         autoPlay: true,
         looping: false,
-        allowedScreenSleep: false, // نبقي هذا السطر أيضاً كاحتياط
+        allowedScreenSleep: false,
+        expandToFill: true,
+        autoDetectFullscreenDeviceOrientation: true,
+        autoDetectFullscreenAspectRatio: true,
+        deviceOrientationsOnFullScreen: const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+        deviceOrientationsAfterFullScreen: const [
+          DeviceOrientation.portraitUp,
+        ],
         controlsConfiguration: controlsConfiguration,
       );
 
-      _betterPlayerController =
-          BetterPlayerController(betterPlayerConfiguration);
+      final controller = BetterPlayerController(betterPlayerConfiguration);
+      controller.setBetterPlayerGlobalKey(_betterPlayerKey);
 
-      BetterPlayerDataSource dataSource = BetterPlayerDataSource(
+      final dataSource = BetterPlayerDataSource(
         BetterPlayerDataSourceType.network,
         liveStreamUrl,
         liveStream: true,
+        notificationConfiguration: const BetterPlayerNotificationConfiguration(
+          showNotification: false,
+          title: 'قناة دعوة الفضائية',
+          author: 'بث مباشر',
+        ),
       );
-      _betterPlayerController!.setBetterPlayerGlobalKey(_betterPlayerKey);
 
-      await _betterPlayerController!.setupDataSource(dataSource);
+      await controller.setupDataSource(dataSource);
+
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+
+      _betterPlayerController = controller;
 
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
       });
 
       _checkPlaybackState();
+      WakelockPlus.enable();
     } catch (e) {
-      print("Error initializing BetterPlayer: $e");
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
-        _error = "لا يمكن تحميل البث المباشر.";
+        _isRefreshing = false;
+        if (kIsWeb) {
+          _error =
+              'لا يمكن تحميل البث المباشر. قد يكون السبب قيود المتصفح أو CORS.';
+        } else {
+          _error = 'لا يمكن تحميل البث المباشر الآن. جرّب التحديث اليدوي.';
+        }
       });
     }
   }
@@ -115,235 +157,306 @@ class LiveStreamScreenState extends State<LiveStreamScreen>
       final response = await http.get(Uri.parse(_guideUrl));
       if (response.statusCode == 200) {
         final List<dynamic> jsonData =
-        jsonDecode(utf8.decode(response.bodyBytes));
-        return jsonData
-            .map((item) => ProgramGuideItem.fromJson(item))
-            .toList();
-      } else {
-        throw Exception(
-            'Failed to load program guide (Status ${response.statusCode})');
+            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return jsonData.map((item) => ProgramGuideItem.fromJson(item)).toList();
       }
-    } catch (e) {
-      print("Error fetching program guide: $e");
-      throw Exception('Failed to load program guide: $e');
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-  }
-
-  @override
-  void didUpdateWidget(covariant LiveStreamScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.isInTabView && widget.currentIndex != oldWidget.currentIndex) {
-      _checkPlaybackState();
+      return [];
+    } catch (_) {
+      return [];
     }
   }
 
   void _checkPlaybackState() {
     if (!mounted || _betterPlayerController == null) return;
 
-    bool shouldPlay = (widget.currentIndex == widget.tabIndex);
-    print(
-        "LiveStreamScreen (BottomNav): Check State - Current Index: ${widget.currentIndex}, TabIndex: ${widget.tabIndex}, ShouldPlay: $shouldPlay");
+    final shouldPlay = widget.tabNotifier.value == widget.tabIndex;
 
-    if (shouldPlay) {
-      if (_betterPlayerController!.isVideoInitialized() == true &&
-          _betterPlayerController!.isPlaying() == false) {
-        _betterPlayerController!.play();
+    try {
+      final isInitialized =
+          _betterPlayerController!.isVideoInitialized() == true;
+      final isPlaying = _betterPlayerController!.isPlaying() == true;
+
+      if (shouldPlay) {
+        if (isInitialized && !isPlaying) {
+          _betterPlayerController!.play();
+        }
+      } else {
+        if (isInitialized && isPlaying) {
+          _betterPlayerController!.pause();
+        }
       }
-    } else {
-      if (_betterPlayerController!.isVideoInitialized() == true &&
-          _betterPlayerController!.isPlaying() == true) {
-        _betterPlayerController!.pause();
-      }
+    } catch (_) {
+      // نتجنب أي crash من استدعاءات حالة المشغل
     }
   }
 
-  void publicPause() {
-    if (_betterPlayerController != null &&
-        _betterPlayerController!.isVideoInitialized() == true &&
-        _betterPlayerController!.isPlaying() == true) {
-      _betterPlayerController?.pause();
-    }
-  }
-
-  void publicCheckPlaybackState() {
-    _checkPlaybackState();
-  }
-
-  void setStateIfMounted(VoidCallback fn) {
-    if (mounted) {
-      setState(fn);
-    }
+  Future<void> _refreshStream() async {
+    await _initializePlayer(isRefresh: true);
   }
 
   @override
   void dispose() {
-    print("LiveStreamScreen: dispose");
+    widget.tabNotifier.removeListener(_checkPlaybackState);
     _betterPlayerController?.dispose();
-
-    // --- 🔴 3. قم بإضافة هذا السطر لإلغاء تفعيل منع الإغلاق ---
     WakelockPlus.disable();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return _buildFullScreenLayout();
-  }
 
-  Widget _buildFullScreenLayout() {
-    final scaffoldBackgroundColor = Colors.grey[100];
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    if (isLandscape || _manualFullscreen) {
+      return _buildFullscreenPlayer();
+    }
+
     return Scaffold(
-      backgroundColor: scaffoldBackgroundColor,
       body: Stack(
         children: [
-          _buildPlayerHeader(),
-          DraggableScrollableSheet(
-            initialChildSize: 0.35,
-            minChildSize: 0.35,
-            maxChildSize: 0.9,
-            builder: (context, scrollController) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24.0)),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 10,
-                        offset: Offset(0, -5)),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24.0)),
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(20.0),
-                    children: [
-                      _buildDragHandle(),
-                      _buildInfoPanelContent(context),
-                    ],
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/bbg.jpg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _buildTopHeader(context),
+                _buildBlueInfoBar(),
+                Expanded(
+                  child: Container(
+                    color: Colors.white,
+                    child: Column(
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Container(
+                            color: Colors.black,
+                            child: _buildPlayerWidget(),
+                          ),
+                        ),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 16),
+                                _buildMainTitleSection(),
+                                const SizedBox(height: 16),
+                                _buildPillsSection(),
+                                const SizedBox(height: 20),
+                                _buildProgramGuideSection(),
+                                const SizedBox(height: 30),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
-          _buildBackButton(),
         ],
       ),
     );
   }
 
-  Widget _buildPlayerHeader() {
-    final screenHeight = MediaQuery.of(context).size.height;
+  Widget _buildTopHeader(BuildContext context) {
     return Container(
-      height: screenHeight * 0.65,
-      width: double.infinity,
-      color: Colors.black,
-      child: _buildPlayerWidget(),
-    );
-  }
-
-  Widget _buildPlayerWidget() {
-    if (_isLoading) {
-      print("Building Player Widget: Loading State");
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
-    }
-    if (_error != null) {
-      print("Building Player Widget: Error State - $_error");
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Text(_error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
-        ),
-      );
-    }
-    if (_betterPlayerController != null) {
-      print(
-          "Building Player Widget: Success State - BetterPlayer Controller Ready");
-      return AspectRatio(
-        aspectRatio: 16 / 9,
-        child: BetterPlayer(
-            key: _betterPlayerKey,controller: _betterPlayerController!),
-      );
-    }
-
-    print("Building Player Widget: Fallback State - Player not available");
-    return const Center(
-        child: Text("Player not available.",
-            style: TextStyle(color: Colors.white70)));
-  }
-
-  Widget _buildBackButton() {
-    return Positioned(
-      top: 40,
-      left: 16,
-      child: SafeArea(
-        child: CircleAvatar(
-          backgroundColor: Colors.black.withOpacity(0.5),
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+      height: 72,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      child: Center(
+        child: Image.asset(
+          'assets/images/logo.png',
+          height: 44,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.nightlight_round, size: 30, color: _primaryBlue),
+              Text(
+                'قناة دعوة',
+                style: TextStyle(
+                  color: _primaryBlue,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDragHandle() {
-    return Center(
-      child: Container(
-        width: 40,
-        height: 4,
-        margin: const EdgeInsets.only(bottom: 16.0),
-        decoration: BoxDecoration(
-          color: Colors.grey[300],
-          borderRadius: BorderRadius.circular(2),
-        ),
+  Widget _buildBlueInfoBar() {
+    return Container(
+      width: double.infinity,
+      color: _primaryBlue,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'تابعوا البث الحي بث مباشر 7/24',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+              textAlign: TextAlign.right,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: _accentRed,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.circle, color: Colors.white, size: 8),
+                SizedBox(width: 6),
+                Text(
+                  'مباشر',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInfoPanelContent(BuildContext context) {
+  Widget _buildMainTitleSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                const Text(
+                  'البث المباشر',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const Text(
+                  'إذا توقف البث اضغط تحديث',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                _isRefreshing
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        onPressed: _refreshStream,
+                        icon: const Icon(Icons.refresh, color: Colors.blue),
+                        tooltip: 'تحديث البث',
+                      ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.favorite_border, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPillsSection() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      reverse: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _buildPill(Icons.tv, 'قناة دعوة الفضائية'),
+          const SizedBox(width: 8),
+          _buildPill(Icons.access_time, 'مستمر 24/7'),
+          const SizedBox(width: 8),
+          _buildPill(Icons.hd, 'جودة تلقائية'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.black54,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(icon, size: 16, color: Colors.black45),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgramGuideSection() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "البث المباشر",
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              const Text(
+                'خريطة البرامج',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
-            ),
-            IconButton(
-              icon: Icon(Icons.favorite_border,
-                  color: Colors.red[400], size: 28),
-              onPressed: () {},
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _buildInfoChip(context, Icons.tv_rounded, "قناة دعوة الفضائية"),
-        _buildInfoChip(context, Icons.access_time_rounded, "مستمر 24/7"),
-        const Divider(height: 32),
-        Text(
-          "خريطة البرامج:",
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _accentRed,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -353,128 +466,145 @@ class LiveStreamScreenState extends State<LiveStreamScreen>
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  "خطأ في تحميل الجدول: ${snapshot.error}",
-                  style: const TextStyle(color: Colors.red),
+
+            if (snapshot.hasError ||
+                !snapshot.hasData ||
+                snapshot.data!.isEmpty) {
+              return Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(15),
                 ),
+                child: const Text('لا توجد بيانات متاحة حالياً'),
               );
             }
-            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-              return _buildProgramGuideTable(snapshot.data!);
-            }
-            return const Center(child: Text("لا توجد بيانات لعرضها."));
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, index) {
+                return _buildGuideItem(snapshot.data![index]);
+              },
+            );
           },
         ),
       ],
     );
   }
 
-  Widget _buildProgramGuideTable(List<ProgramGuideItem> items) {
+  Widget _buildGuideItem(ProgramGuideItem item) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          _buildGuideRow(
-            from: "من",
-            to: "الى",
-            program: "البرنامج",
-            isHeader: true,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          ...items.map((item) {
-            return _buildGuideRow(
-              from: item.from,
-              to: item.to,
-              program: item.program,
-            );
-          }).toList(),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  item.from,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  item.to,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 11,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              item.program,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_left, color: Colors.grey),
         ],
       ),
     );
   }
 
-  Widget _buildGuideRow({
-    required String from,
-    required String to,
-    required String program,
-    bool isHeader = false,
-  }) {
-    final style = TextStyle(
-      fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-      fontSize: 13,
-      color: Colors.black87,
-    );
-    final padding = const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0);
+  Widget _buildPlayerWidget() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      decoration: BoxDecoration(
-        color: isHeader ? Colors.grey.shade100 : Colors.transparent,
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.grey.shade200,
-            width: 1.0,
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _refreshStream,
+                icon: const Icon(Icons.refresh),
+                label: const Text('إعادة المحاولة'),
+              ),
+            ],
           ),
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 5,
-            child: Padding(
-              padding: padding,
-              child: Text(program, style: style, textAlign: TextAlign.right),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: padding,
-              child: Text(to, style: style, textAlign: TextAlign.center),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: padding,
-              child: Text(from, style: style, textAlign: TextAlign.center),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(BuildContext context, IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey[600], size: 18),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[800],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _enablePip() async {
-    if (_betterPlayerController != null) {
-      try {
-        await _betterPlayerController!.enablePictureInPicture(_betterPlayerKey);
-      } catch (e) {
-        debugPrint("PIP enable failed: $e");
-      }
+      );
     }
+
+    if (_betterPlayerController != null) {
+      return BetterPlayer(
+        key: _betterPlayerKey,
+        controller: _betterPlayerController!,
+      );
+    }
+
+    return const SizedBox();
+  }
+
+  Widget _buildFullscreenPlayer() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(child: _buildPlayerWidget()),
+    );
   }
 }

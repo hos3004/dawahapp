@@ -43,9 +43,7 @@ class BlogPost extends Equatable {
            }
         }
         // إذا لم يتم العثور على أحجام، استخدم source_url الافتراضي
-        if (finalImageUrl == null) {
-          finalImageUrl = json['_embedded']['wp:featuredmedia'][0]['source_url'];
-        }
+        finalImageUrl ??= json['_embedded']['wp:featuredmedia'][0]['source_url'];
       }
     } catch (e) {
       print('Error parsing blog image: $e');

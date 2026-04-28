@@ -4,48 +4,84 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:nb_utils/nb_utils.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 
 import 'data/repositories/program_repository.dart';
 import 'local/app_localizations.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/Splash_Screen/Splash_Screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
-// ✅ استيراد ملفات المصحف الجديد والهيكلية الجديدة
 import 'core/services/service_locator.dart';
 import 'features/quran/presentation/pages/quran_view_page.dart';
-
-// ✅ استيراد البلوكات الرئيسية لرفع حالتها
 import 'presentation/bloc/home/home_bloc.dart';
 import 'presentation/bloc/home/home_event.dart';
-import 'presentation/screens/categories/categories_screen.dart'; // لاستيراد CategoriesBloc إذا كان في ملف منفصل، أو استيراده من مسار البلوك
+import 'presentation/screens/categories/categories_screen.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/notification_router.dart';
+import 'presentation/screens/live_stream/live_stream_screen.dart';
+import 'tv/tv_app.dart';
+import 'tv/services/tv_platform.dart';
 
-// ملاحظة: تأكد من مسار CategoriesBloc الصحيح
+// Global Navigator Key
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // ✅ 1. تهيئة الخدمات الجديدة (Service Locator)
+
+  if (!kIsWeb) {
+    await Firebase.initializeApp();
+  }
+
   await ServiceLocator.init();
-  await initialize(); // nb_utils initialization
+  await initialize();
 
   textPrimaryColorGlobal = Colors.black;
   textSecondaryColorGlobal = Colors.grey.shade700;
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+
+  final isAndroidTv = await TvPlatform.isAndroidTv();
+
+  // ✅ للموبايل فقط: إجبار Portrait. التلفزيون يتعامل مع التوجه بنفسه.
+  if (!isAndroidTv) {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
 
   runApp(
-    // ✅ نقوم بإنشاء RepositoryProvider في الجذر
     RepositoryProvider<ProgramRepository>(
       create: (_) => ProgramRepository(),
-      child: const MyApp(),
+      child: isAndroidTv ? const TvApp() : const MyApp(),
     ),
   );
+
+  // تأجيل تهيئة الإشعارات - للموبايل فقط
+  if (!kIsWeb && !isAndroidTv) {
+    Future.microtask(() async {
+      try {
+        await NotificationService().init();
+        NotificationService.notificationStream.listen((payload) {
+          final context = navigatorKey.currentContext;
+          if (payload != null && context != null && context.mounted) {
+            NotificationRouter.navigate(context, payload);
+          }
+        });
+      } catch (e) {
+        debugPrint('Deferred init error: $e');
+      }
+    });
+  }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final baseLight = ThemeData(
@@ -73,36 +109,33 @@ class MyApp extends StatelessWidget {
       ),
     );
 
-    // ✅ هنا نقوم برفع البلوكات (HomeBloc و CategoriesBloc)
     return MultiBlocProvider(
       providers: [
-        // بلوك الرئيسية: يتم إنشاؤه مرة واحدة ويجلب البيانات فوراً
         BlocProvider<HomeBloc>(
           create: (context) => HomeBloc(
-            programRepository: RepositoryProvider.of<ProgramRepository>(context),
+            programRepository: RepositoryProvider.of<ProgramRepository>(
+              context,
+            ),
           )..add(FetchHomeContent()),
         ),
-        // بلوك التصنيفات
         BlocProvider<CategoriesBloc>(
-          create: (context) => CategoriesBloc(
-            RepositoryProvider.of<ProgramRepository>(context),
-          )..add(FetchCategories()),
+          create: (context) =>
+              CategoriesBloc(RepositoryProvider.of<ProgramRepository>(context)),
         ),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'Daawah App',
         theme: baseLight.copyWith(
-          textTheme: GoogleFonts.tajawalTextTheme(baseLight.textTheme).apply(
-            bodyColor: Colors.black87,
-            displayColor: Colors.black87,
-          ),
+          textTheme: GoogleFonts.tajawalTextTheme(
+            baseLight.textTheme,
+          ).apply(bodyColor: Colors.black87, displayColor: Colors.black87),
         ),
         darkTheme: baseDark.copyWith(
-          textTheme: GoogleFonts.tajawalTextTheme(baseDark.textTheme).apply(
-            bodyColor: Colors.white,
-            displayColor: Colors.white,
-          ),
+          textTheme: GoogleFonts.tajawalTextTheme(
+            baseDark.textTheme,
+          ).apply(bodyColor: Colors.white, displayColor: Colors.white),
         ),
         themeMode: ThemeMode.system,
         locale: const Locale('ar'),
@@ -119,6 +152,9 @@ class MyApp extends StatelessWidget {
           '/home': (context) => const HomeScreen(),
           '/settings': (context) => const SettingsScreen(),
           '/quran': (context) => const QuranViewPage(),
+          // ✅ 3. إضافة المسارات الناقصة لضمان عدم حدوث خطأ
+          '/live_stream': (context) =>
+              LiveStreamScreen(tabIndex: 0, tabNotifier: ValueNotifier(0)),
         },
         onGenerateRoute: (settings) {
           Widget page;
@@ -131,6 +167,11 @@ class MyApp extends StatelessWidget {
               break;
             case '/quran':
               page = const QuranViewPage();
+              break;
+            // ✅ معالجة حالة البث المباشر
+            case '/live_stream':
+              page =
+                  LiveStreamScreen(tabIndex: 0, tabNotifier: ValueNotifier(0));
               break;
             default:
               page = const HomeScreen();
