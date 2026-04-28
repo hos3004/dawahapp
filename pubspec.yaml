@@ -71,7 +71,8 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/app_icon1.png" # تأكد أن هذا هو المسار الصحيح لأيقونتك
+  image_path: "assets/images/alogo.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
